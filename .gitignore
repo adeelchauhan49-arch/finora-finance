@@ -1,0 +1,4 @@
+.env
+/vendor/
+__pycache__/
+/supabase/.temp/

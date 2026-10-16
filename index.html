@@ -1,0 +1,236 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="Finora AI personal finance dashboard">
+  <title>Finora by Adeel | Personal Finance</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Poppins:wght@600;700;800&display=swap" rel="stylesheet">
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+  <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" rel="stylesheet">
+  <link rel="stylesheet" href="assets/css/style.css">
+</head>
+<body>
+  <div class="app-shell">
+    <aside class="sidebar" id="sidebar">
+      <div class="brand"><span class="brand-mark"><i class="fa-solid fa-chart-line"></i></span><span>finora<span class="brand-dot">.</span><small>by Adeel</small></span></div>
+      <div class="workspace-label">Workspace</div>
+      <nav class="main-nav" aria-label="Main navigation">
+        <a class="nav-link active" href="#dashboard"><i class="fa-solid fa-grid-2"></i><span>Overview</span></a>
+        <a class="nav-link" href="#transactions"><i class="fa-solid fa-arrow-right-arrow-left"></i><span>Transactions</span></a>
+        <a class="nav-link" href="#budgets"><i class="fa-solid fa-bullseye"></i><span>Budgets</span><span class="nav-badge">2</span></a>
+        <a class="nav-link" href="#reports"><i class="fa-solid fa-chart-pie"></i><span>Reports</span></a>
+      </nav>
+      <div class="workspace-label mt-4">Manage</div>
+      <nav class="main-nav" aria-label="Management navigation">
+        <a class="nav-link" href="#goals"><i class="fa-solid fa-flag"></i><span>Savings goals</span></a>
+        <a class="nav-link" href="#settings"><i class="fa-solid fa-sliders"></i><span>Settings</span></a>
+      </nav>
+      <div class="sidebar-bottom">
+        <div class="upgrade-card" hidden><span class="upgrade-icon"><i class="fa-solid fa-sparkles"></i></span><strong>Unlock more insight</strong><p>Get smarter forecasts with Finora Pro.</p><button class="btn btn-light btn-sm">Explore Pro <i class="fa-solid fa-arrow-up-right-from-square ms-1"></i></button></div>
+        <div class="user-mini"><div class="avatar">AK</div><div><strong id="sidebarUserName">Alex Kim</strong><small>Free plan</small></div><button class="icon-btn ms-auto" aria-label="Open profile"><i class="fa-solid fa-ellipsis"></i></button></div>
+      </div>
+    </aside>
+
+    <main class="main-content" id="dashboard">
+      <header class="topbar">
+        <button class="icon-btn menu-toggle" id="menuToggle" aria-label="Toggle navigation"><i class="fa-solid fa-bars"></i></button>
+        <div><div class="eyebrow">Today</div><h1>Good morning, Alex <span class="wave">✦</span></h1></div>
+        <div class="topbar-actions"><button class="signin-btn" data-bs-toggle="modal" data-bs-target="#loginModal">Sign in</button><button class="account-btn" data-bs-toggle="modal" data-bs-target="#accountModal"><i class="fa-solid fa-user-plus"></i> Create account</button><button class="icon-btn theme-toggle" id="themeToggle" aria-label="Toggle theme"><i class="fa-solid fa-moon"></i></button><button class="icon-btn notification-btn" aria-label="Notifications"><i class="fa-regular fa-bell"></i><span></span></button><div class="profile-menu-anchor" id="profileMenuAnchor"><button class="avatar avatar-lg profile-menu-toggle" id="userAvatar" type="button" aria-label="Open profile menu" aria-haspopup="true" aria-expanded="false" aria-controls="profileDropdown">AK</button><div class="profile-dropdown" id="profileDropdown" role="menu" hidden><div class="profile-dropdown-identity"><strong id="profileDropdownName">Not signed in</strong><span id="profileDropdownEmail">Sign in to view your account</span></div><a class="profile-dropdown-link" href="#settings" role="menuitem"><i class="fa-solid fa-sliders"></i> Settings</a><button class="profile-dropdown-link profile-dropdown-signout" id="profileDropdownSignout" type="button" role="menuitem"><i class="fa-solid fa-arrow-right-from-bracket"></i> Sign out</button></div></div></div>
+      </header>
+
+      <section class="hero-row">
+        <div><span class="section-kicker">Your financial cockpit</span><h2>Here is your money<br><em>at a glance.</em></h2></div>
+        <div class="period-control"><button class="period-btn active" data-period="this-month">This month</button><button class="period-btn" data-period="last-month">Last month</button><button class="period-btn" data-period="three-months">3 months</button><button class="filter-btn" aria-label="Filter date"><i class="fa-solid fa-sliders"></i></button></div>
+      </section>
+      <section class="panel finish-setup-card" id="finishSetupCard" aria-labelledby="finishSetupTitle" hidden>
+        <div><h3 id="finishSetupTitle">Finish setting up your profile (income, budget and savings goal)</h3><p>Your setup is not complete yet. You can continue whenever you’re ready.</p></div>
+        <div class="finish-setup-actions"><button class="btn btn-primary" id="finishSetupButton" type="button">Finish setup</button><button class="btn btn-light" id="dismissFinishSetup" type="button" aria-label="Dismiss finish setup reminder">Dismiss</button></div>
+      </section>
+
+      <section class="stats-grid" aria-label="Financial summary">
+        <article class="stat-card stat-primary"><div class="stat-top"><span class="stat-label">Total balance</span><span class="stat-icon"><i class="fa-solid fa-wallet"></i></span></div><div class="stat-value" id="totalBalance">Rs 12,840<span class="decimal">.50</span></div><div class="stat-foot"><span class="positive"><i class="fa-solid fa-arrow-trend-up"></i> 12.8%</span><span>vs last month</span></div></article>
+        <article class="stat-card"><div class="stat-top"><span class="stat-label">Monthly income</span><span class="stat-icon green"><i class="fa-solid fa-arrow-down"></i></span></div><div class="stat-value" id="monthlyIncome">Rs 5,240<span class="decimal">.00</span></div><div class="stat-foot"><span class="positive"><i class="fa-solid fa-arrow-trend-up"></i> 8.2%</span><span>vs last month</span></div></article>
+        <article class="stat-card"><div class="stat-top"><span class="stat-label">Monthly spending</span><span class="stat-icon orange"><i class="fa-solid fa-arrow-up"></i></span></div><div class="stat-value" id="monthlySpending">Rs 2,185<span class="decimal">.32</span></div><div class="stat-foot"><span class="negative"><i class="fa-solid fa-arrow-trend-up"></i> 4.6%</span><span>vs last month</span></div></article>
+        <article class="stat-card"><div class="stat-top"><span class="stat-label">Savings rate</span><span class="stat-icon purple"><i class="fa-solid fa-percent"></i></span></div><div class="stat-value" id="savingsRate">58<span class="decimal">.3%</span></div><div class="stat-foot"><span class="positive"><i class="fa-solid fa-arrow-trend-up"></i> 6.1%</span><span>vs last month</span></div></article>
+      </section>
+
+      <section class="dashboard-grid">
+        <article class="panel chart-panel"><div class="panel-heading"><div><span class="section-kicker">Cash flow</span><h3>Income vs expenses</h3></div><button class="more-btn" aria-label="More chart options"><i class="fa-solid fa-ellipsis"></i></button></div><div class="chart-legend"><span><i class="legend-dot income"></i>Income</span><span><i class="legend-dot expense"></i>Expenses</span></div><div class="chart-wrap"><canvas id="cashflowChart" aria-label="Income versus expenses chart"></canvas><div class="chart-empty-state d-none" id="cashflowEmptyState">No transactions this period.</div></div></article>
+        <article class="panel insight-panel"><div class="panel-heading"><div><span class="section-kicker">Finora intelligence</span><h3>Smart insights</h3></div><span class="ai-spark"><i class="fa-solid fa-sparkles"></i></span></div><div class="prediction-box"><div><span class="prediction-label"><i class="fa-solid fa-wand-magic-sparkles"></i> Current month-end spending forecast</span><strong id="predictionAmount">Not enough data</strong><small id="predictionCopy">Add expenses to generate this forecast</small></div><span class="confidence" id="predictionConfidence">Insufficient data</span></div><div class="insight-feature"><div class="insight-orb"><i class="fa-solid fa-wand-magic-sparkles"></i></div><div><strong id="budgetInsightTitle">Forecast unavailable</strong><p id="budgetInsightCopy">A month-end forecast needs more data.</p></div></div><div class="insight-list"><div><span class="insight-list-icon blue"><i class="fa-solid fa-bolt"></i></span><p><strong id="topCategoryTitle">No category spending yet</strong><small id="topCategoryCopy">Your expense categories will appear here.</small></p><i class="fa-solid fa-chevron-right"></i></div><div><span class="insight-list-icon green"><i class="fa-solid fa-bullseye"></i></span><p><strong>This month actuals</strong><small id="monthlyRecordsCopy">0 expense records</small></p><i class="fa-solid fa-chevron-right"></i></div></div><button class="insight-action" id="refreshPrediction">Refresh prediction <i class="fa-solid fa-rotate"></i></button></article>
+      </section>
+
+      <section class="lower-grid">
+        <article class="panel transactions-panel" id="transactions"><div class="panel-heading"><div><span class="section-kicker">Activity</span><h3>Recent transactions</h3></div><button class="text-btn" data-bs-toggle="modal" data-bs-target="#transactionModal">Add expense <i class="fa-solid fa-plus"></i></button></div><div class="transaction-list" id="transactionList"><div class="transaction-row"><span class="transaction-icon food"><i class="fa-solid fa-utensils"></i></span><div class="transaction-name"><strong>Harvest Kitchen</strong><small>Food & dining · Today</small></div><strong class="amount expense-amount">-Rs 42.80</strong></div><div class="transaction-row"><span class="transaction-icon income-icon"><i class="fa-solid fa-building-columns"></i></span><div class="transaction-name"><strong>Acme Inc. <span class="verified"><i class="fa-solid fa-check"></i></span></strong><small>Salary · Sep 15, 2026</small></div><strong class="amount income-amount">+Rs 4,850.00</strong></div><div class="transaction-row"><span class="transaction-icon transport"><i class="fa-solid fa-train-subway"></i></span><div class="transaction-name"><strong>Metro Transit</strong><small>Transport · Sep 14, 2026</small></div><strong class="amount expense-amount">-Rs 36.00</strong></div><div class="transaction-row"><span class="transaction-icon shopping"><i class="fa-solid fa-bag-shopping"></i></span><div class="transaction-name"><strong>Northstar Market</strong><small>Shopping · Sep 13, 2026</small></div><strong class="amount expense-amount">-Rs 128.46</strong></div></div></article>
+        <article class="panel budget-panel" id="budgets"><div class="panel-heading"><div><span class="section-kicker" id="budgetPeriodLabel">This month</span><h3>Budget overview</h3></div><button class="more-btn" id="editBudgetButton" type="button" aria-label="Edit budget" title="Edit budget"><i class="fa-solid fa-ellipsis" aria-hidden="true"></i></button></div><div class="budget-total"><div><span>Used this period</span><strong id="budgetUsed">Rs 0.00 <small>/ Rs 2,400.00</small></strong></div><div class="budget-ring" id="budgetRing"><span id="budgetPercent">0<small>%</small></span></div></div><span class="budget-overrun d-none" id="budgetOverrun" aria-live="polite"></span><div class="progress budget-progress"><div class="progress-bar" id="budgetProgress" style="width:0%"></div></div><div class="budget-meta"><span id="budgetRemaining">Rs 2,400.00 remaining</span><span>15 days left</span></div><div class="budget-categories" id="budgetCategoriesList"><div class="budget-category-empty">No expense categories this period.</div></div></article>
+      </section>
+      <section class="premium-grid">
+        <article class="panel timeline-panel"><div class="panel-heading"><div><span class="section-kicker" id="timelinePeriodLabel">This month</span><h3>Spending timeline</h3></div><span class="timeline-total" id="todayTotal">Rs 0.00</span></div><div class="timeline-list" id="timelineList"><div class="timeline-empty"><i class="fa-solid fa-sun"></i><span>No transactions this period.</span></div></div></article>
+        <article class="panel health-panel"><div class="panel-heading"><div><span class="section-kicker">Finora score</span><h3>Financial health</h3></div><span class="health-grade" id="healthGrade">Good</span></div><div class="health-content"><div class="health-gauge"><svg viewBox="0 0 120 120" aria-label="Financial health score"><circle class="gauge-track" cx="60" cy="60" r="48"></circle><circle class="gauge-value" id="healthGauge" cx="60" cy="60" r="48"></circle></svg><div><strong id="healthScore">72</strong><small>/ 100</small></div></div><div class="health-reasons" id="healthReasons"><span><i class="fa-solid fa-check"></i> Savings rate is healthy</span><span><i class="fa-solid fa-check"></i> Spending is within budget</span><span><i class="fa-solid fa-lightbulb"></i> Add investments to improve</span></div></div></article>
+      </section>
+      <footer class="page-footer"><span>Finora by Adeel <span class="brand-dot">.</span> Personal finance, made clear. <span class="founder-credit">Founded by Adeel Chauhan</span></span><span><i class="fa-solid fa-lock"></i> Your data stays private</span></footer>
+      <section class="settings-page" id="settings" aria-labelledby="settingsTitle" hidden>
+        <header class="settings-heading">
+          <div><span class="section-kicker">Account preferences</span><h2 id="settingsTitle">Settings</h2><p>Manage your profile, budgets, and security.</p></div>
+        </header>
+        <div class="settings-grid">
+          <section class="panel settings-panel">
+            <div class="panel-heading"><div><span class="section-kicker">Profile</span><h3>Personal details</h3></div></div>
+            <form id="settingsProfileForm">
+              <label class="form-label" for="settingsName">Name</label><input class="form-control" id="settingsName" name="name" required minlength="2" maxlength="120">
+              <label class="form-label mt-3" for="settingsEmail">Email</label><input class="form-control" id="settingsEmail" name="email" type="email" required maxlength="190">
+              <div class="settings-message" id="settingsProfileMessage" aria-live="polite"></div>
+              <button class="btn btn-primary mt-3" type="submit">Save profile</button>
+            </form>
+          </section>
+          <section class="panel settings-panel settings-financial-profile" id="settingsFinancialProfilePanel" hidden>
+            <div class="panel-heading"><div><span class="section-kicker">Financial profile</span><h3>Income and savings</h3></div></div>
+            <form id="settingsFinancialProfileForm">
+              <div class="row g-3">
+                <div class="col-md-6"><label class="form-label" for="settingsMonthlySalary">Monthly salary</label><input class="form-control settings-income" id="settingsMonthlySalary" type="number" min="0" max="9999999999.99" step="0.01" required></div>
+                <div class="col-md-6"><label class="form-label" for="settingsBusinessIncome">Business income</label><input class="form-control settings-income" id="settingsBusinessIncome" type="number" min="0" max="9999999999.99" step="0.01" required></div>
+                <div class="col-md-6"><label class="form-label" for="settingsFreelanceIncome">Freelance income</label><input class="form-control settings-income" id="settingsFreelanceIncome" type="number" min="0" max="9999999999.99" step="0.01" required></div>
+                <div class="col-md-6"><label class="form-label" for="settingsOtherIncome">Other income</label><input class="form-control settings-income" id="settingsOtherIncome" type="number" min="0" max="9999999999.99" step="0.01" required></div>
+                <div class="col-md-6"><label class="form-label" for="settingsIncomeTotal">Monthly income</label><input class="form-control" id="settingsIncomeTotal" type="number" readonly aria-readonly="true"></div>
+                <div class="col-md-6"><label class="form-label" for="settingsMonthlySavingsGoal">Monthly savings goal</label><input class="form-control" id="settingsMonthlySavingsGoal" type="number" min="0" max="9999999999.99" step="0.01" required></div>
+                <div class="col-md-6"><label class="form-label" for="settingsSavingsPercentage">Target savings percentage</label><div class="input-group"><input class="form-control" id="settingsSavingsPercentage" type="number" min="0" max="100" step="any"><span class="input-group-text">%</span></div></div>
+              </div>
+              <div class="settings-message" id="settingsFinancialProfileMessage" aria-live="polite"></div>
+              <button class="btn btn-primary mt-3" type="submit">Save financial profile</button>
+              <button class="btn btn-light mt-3" id="settingsOpenOnboarding" type="button">Complete or edit your financial profile</button>
+            </form>
+          </section>
+          <section class="panel settings-panel">
+            <div class="panel-heading"><div><span class="section-kicker">Preferences</span><h3>Currency and budgets</h3></div></div>
+            <form id="settingsPreferencesForm">
+              <label class="form-label" for="settingsCurrency">Currency</label>
+              <select class="form-select" id="settingsCurrency" name="currency"><option value="INR">INR · Rs</option><option value="USD">USD · $</option><option value="EUR">EUR · €</option></select>
+              <label class="form-label mt-3" for="settingsMonthlyBudget">Monthly budget limit</label>
+              <input class="form-control" id="settingsMonthlyBudget" name="monthly_budget" type="number" min="1" step="0.01" required>
+              <div class="settings-category-limits" id="settingsCategoryLimits"></div>
+              <div class="settings-message" id="settingsPreferencesMessage" aria-live="polite"></div>
+              <button class="btn btn-primary mt-3" type="submit">Save preferences</button>
+            </form>
+          </section>
+          <section class="panel settings-panel">
+            <div class="panel-heading"><div><span class="section-kicker">Security</span><h3>Change password</h3></div></div>
+            <form id="settingsPasswordForm">
+              <label class="form-label" for="settingsCurrentPassword">Current password</label><input class="form-control" id="settingsCurrentPassword" name="current_password" type="password" required autocomplete="current-password">
+              <label class="form-label mt-3" for="settingsNewPassword">New password</label><input class="form-control" id="settingsNewPassword" name="new_password" type="password" required minlength="8" autocomplete="new-password">
+              <label class="form-label mt-3" for="settingsConfirmPassword">Confirm new password</label><input class="form-control" id="settingsConfirmPassword" name="confirm_password" type="password" required minlength="8" autocomplete="new-password">
+              <div class="settings-message" id="settingsPasswordMessage" aria-live="polite"></div>
+              <button class="btn btn-primary mt-3" type="submit">Update password</button>
+            </form>
+          </section>
+          <section class="panel settings-panel">
+            <div class="panel-heading"><div><span class="section-kicker">Notifications</span><h3>Notification preferences</h3></div></div>
+            <form id="settingsNotificationsForm">
+              <label class="settings-toggle-row" for="settingsBudgetAlerts"><span><strong>Budget overrun alerts</strong><small>Notify me when spending passes a budget limit.</small></span><input class="form-check-input" id="settingsBudgetAlerts" type="checkbox"></label>
+              <label class="settings-toggle-row" for="settingsWeeklySummary"><span><strong>Weekly summary email</strong><small>Preference saved locally for future email support.</small></span><input class="form-check-input" id="settingsWeeklySummary" type="checkbox"></label>
+              <div class="settings-message" id="settingsNotificationsMessage" aria-live="polite"></div>
+              <button class="btn btn-primary mt-3" type="submit">Save notifications</button>
+            </form>
+          </section>
+          <section class="panel settings-panel">
+            <div class="panel-heading"><div><span class="section-kicker">Jarvis actions</span><h3>Automatic transaction capture</h3></div></div>
+            <form id="settingsJarvisActionsForm">
+              <label class="settings-toggle-row" for="settingsJarvisAutoAdd"><span><strong>Allow auto-add</strong><small>Only explicit expense and income requests under your limit are saved without confirmation. Each can be undone for 10 minutes.</small></span><input class="form-check-input" id="settingsJarvisAutoAdd" type="checkbox"></label>
+              <label class="form-label mt-3" for="settingsJarvisAutoAddLimit">Per-transaction limit (<span id="settingsJarvisCurrency">Rs</span>)</label>
+              <input class="form-control" id="settingsJarvisAutoAddLimit" type="number" min="1" max="9999999999.99" step="0.01" value="5000" required>
+              <div class="settings-message" id="settingsJarvisActionsMessage" aria-live="polite"></div>
+              <button class="btn btn-primary mt-3" type="submit">Save Jarvis settings</button>
+            </form>
+          </section>
+        </div>
+      </section>
+      <section class="reports-page" id="reports" aria-labelledby="reportsTitle" hidden>
+        <header class="reports-heading">
+          <div><span class="section-kicker">Your money, clearly</span><h2 id="reportsTitle">Reports</h2><p>Explore spending and cash flow across a selected period.</p></div>
+          <button class="btn btn-primary reports-export" id="reportsCsvExport" type="button"><i class="fa-solid fa-download me-2"></i>Export CSV</button>
+        </header>
+        <section class="panel reports-filters" aria-label="Report date range">
+          <div class="reports-range-presets" role="group" aria-label="Preset date range">
+            <button class="report-range-btn active" type="button" data-report-period="this-month">This month</button>
+            <button class="report-range-btn" type="button" data-report-period="last-month">Last month</button>
+            <button class="report-range-btn" type="button" data-report-period="three-months">3 months</button>
+          </div>
+          <span class="reports-filter-divider" aria-hidden="true"></span>
+          <div class="reports-custom-range"><label for="reportsStartDate">From</label><input class="form-control" id="reportsStartDate" type="date"><label for="reportsEndDate">To</label><input class="form-control" id="reportsEndDate" type="date"></div>
+          <div class="settings-message error" id="reportsRangeMessage" aria-live="polite"></div>
+        </section>
+        <div class="reports-empty-state" id="reportsEmptyState" hidden>No data for this range</div>
+        <div class="reports-content" id="reportsContent">
+          <div class="reports-chart-grid">
+            <article class="panel reports-panel"><div class="panel-heading"><div><span class="section-kicker">Expense mix</span><h3>Spending by category</h3></div></div><div class="reports-donut-wrap"><canvas id="reportsCategoryChart" aria-label="Spending by category chart"></canvas></div></article>
+            <article class="panel reports-panel"><div class="panel-heading"><div><span class="section-kicker">Cash flow</span><h3>Income vs expenses</h3></div></div><div class="reports-trend-wrap"><canvas id="reportsTrendChart" aria-label="Income versus expenses trend chart"></canvas></div></article>
+          </div>
+          <div class="reports-top-grid">
+            <article class="panel reports-panel"><div class="panel-heading"><div><span class="section-kicker">Where it goes</span><h3>Top categories</h3></div></div><ol class="reports-ranking" id="reportsTopCategories"></ol></article>
+            <article class="panel reports-panel"><div class="panel-heading"><div><span class="section-kicker">Frequent spending</span><h3>Top merchants</h3></div></div><ol class="reports-ranking" id="reportsTopMerchants"></ol></article>
+          </div>
+        </div>
+      </section>
+      <section class="goals-page" id="goals" aria-labelledby="goalsTitle" hidden>
+        <header class="goals-heading">
+          <div><span class="section-kicker">Plan for what matters</span><h2 id="goalsTitle">Savings goals</h2><p>Track your progress and build toward your next milestone.</p></div>
+          <button class="btn btn-primary" id="goalCreateToggle" type="button">Create a goal <i class="fa-solid fa-plus ms-1"></i></button>
+        </header>
+        <section class="panel goal-create-panel" id="goalCreatePanel" hidden>
+          <div class="panel-heading"><div><span class="section-kicker">New milestone</span><h3>Create a savings goal</h3></div></div>
+          <form id="goalCreateForm" class="goal-form">
+            <div class="goal-form-grid">
+              <div><label class="form-label" for="goalTitle">Goal name</label><input class="form-control" id="goalTitle" name="title" maxlength="120" required placeholder="e.g. Emergency Fund"></div>
+              <div><label class="form-label" for="goalTarget">Target amount</label><input class="form-control" id="goalTarget" name="target_amount" type="number" min="0.01" max="9999999999.99" step="0.01" required></div>
+              <div><label class="form-label" for="goalDeadline">Target date</label><input class="form-control" id="goalDeadline" name="deadline" type="date" required></div>
+              <div><label class="form-label" for="goalStartingAmount">Already saved <span class="goal-optional">(optional)</span></label><input class="form-control" id="goalStartingAmount" name="starting_amount" type="number" min="0" step="0.01" value="0"></div>
+            </div>
+            <div class="goal-form-actions"><div class="settings-message" id="goalCreateMessage" aria-live="polite"></div><button class="btn btn-primary" type="submit">Save goal</button></div>
+          </form>
+        </section>
+        <div class="goals-message settings-message" id="goalsLoadMessage" role="status" aria-live="polite"></div>
+        <div class="goals-empty-state" id="goalsEmptyState" hidden>
+          <span class="goals-empty-icon"><i class="fa-solid fa-flag-checkered"></i></span>
+          <h3>No savings goals yet</h3>
+          <p>Give your next milestone a name and start tracking your progress.</p>
+          <button class="btn btn-primary" id="goalCreateFirst" type="button">Create your first goal</button>
+        </div>
+        <div class="goals-list" id="goalsList"></div>
+      </section>
+    </main>
+  </div>
+
+  <div class="modal fade" id="editBudgetModal" tabindex="-1" aria-labelledby="editBudgetModalTitle" aria-hidden="true"><div class="modal-dialog modal-dialog-centered modal-lg"><div class="modal-content"><form id="editBudgetForm"><div class="modal-header"><div><span class="section-kicker">Budget settings</span><h3 class="modal-title" id="editBudgetModalTitle">Edit budget</h3></div><button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button></div><div class="modal-body"><label class="form-label" for="editMonthlyBudget"><span id="editBudgetCurrencyPrefix">Rs</span> Monthly budget</label><input class="form-control" id="editMonthlyBudget" type="number" min="1" max="9999999999.99" step="0.01" required><div class="budget-edit-categories" id="editBudgetCategoryLimits"></div><p class="small text-muted mb-1" id="editBudgetAllocationSummary" aria-live="polite"></p><p class="small text-warning d-none" id="editBudgetAllocationWarning" role="status"></p><div class="settings-message" id="editBudgetMessage" aria-live="polite"></div></div><div class="modal-footer justify-content-between"><button class="btn btn-outline-secondary" id="resetBudgetDefaults" type="button">Reset to default</button><div class="d-flex gap-2"><button class="btn btn-light" type="button" data-bs-dismiss="modal">Cancel</button><button class="btn btn-primary" id="saveBudgetButton" type="submit">Save budget</button></div></div></form></div></div></div>
+
+  <div class="modal fade" id="transactionModal" tabindex="-1" aria-labelledby="transactionModalLabel" aria-hidden="true"><div class="modal-dialog modal-dialog-centered modal-lg"><div class="modal-content"><div class="modal-header"><div><span class="section-kicker">Smart capture</span><h3 class="modal-title" id="transactionModalLabel">Add transaction</h3></div><button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button></div><form id="transactionForm"><div class="modal-body"><div class="type-toggle"><input type="radio" name="type" id="expenseType" value="expense" checked><label for="expenseType">Expense</label><input type="radio" name="type" id="incomeType" value="income"><label for="incomeType">Income</label></div><div class="row g-3"><div class="col-md-7"><label class="form-label" for="merchant">Merchant or title</label><input class="form-control" id="merchant" required placeholder="e.g. Domino's, Uber, Amazon"></div><div class="col-md-5"><label class="form-label" for="amount">Amount</label><div class="input-group"><span class="input-group-text" id="currencySymbol">Rs</span><input class="form-control" id="amount" type="number" min="0.01" step="0.01" required placeholder="0.00"></div></div><div class="col-md-6"><label class="form-label" for="category">Category <span class="ai-field-note" id="categoryHint">AI ready</span></label><select class="form-select" id="category"><option value="">Let AI classify</option><option>Food & dining</option><option>Shopping</option><option>Transport</option><option>Housing</option><option>Health</option><option>Utilities</option><option>Entertainment</option><option>Other</option></select></div><div class="col-md-6"><label class="form-label" for="paymentMethod">Payment method</label><select class="form-select" id="paymentMethod"><option value="">Choose payment method</option><option value="cash">Cash</option><option value="upi">UPI</option><option value="credit_card">Credit Card</option><option value="debit_card">Debit Card</option><option value="wallet">Wallet</option><option value="bank_transfer">Bank Transfer</option></select></div><div class="col-md-4"><label class="form-label" for="transactionDate">Date</label><input class="form-control" id="transactionDate" type="date" required></div><div class="col-md-4"><label class="form-label" for="transactionTime">Time</label><input class="form-control" id="transactionTime" type="time"></div><div class="col-md-4"><label class="form-label" for="location">Location</label><input class="form-control" id="location" placeholder="Optional"></div><div class="col-12"><label class="form-label" for="transactionNotes">Notes</label><textarea class="form-control" id="transactionNotes" rows="2" placeholder="Optional context for future insights"></textarea></div></div><div class="ai-classification" id="aiClassification"><i class="fa-solid fa-sparkles"></i><span>Enter a merchant and Finora will suggest a category.</span></div></div><div class="modal-footer"><button type="button" class="btn btn-light" data-bs-dismiss="modal">Cancel</button><button class="btn btn-primary" type="submit">Save transaction <i class="fa-solid fa-check ms-1"></i></button></div></form></div></div></div>
+  <div class="modal fade" id="accountModal" tabindex="-1" aria-labelledby="accountModalLabel" aria-hidden="true"><div class="modal-dialog modal-dialog-centered"><div class="modal-content"><div class="modal-header"><div><span class="section-kicker">Your private workspace</span><h3 class="modal-title" id="accountModalLabel">Create your account</h3></div><button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button></div><form id="accountForm"><div class="modal-body"><p class="account-copy">Verify your email with a 6-digit code to access your private workspace.</p><label class="form-label" for="accountName">Your name</label><input class="form-control" id="accountName" required placeholder="e.g. Alex Kim"><label class="form-label mt-3" for="accountEmail">Email address</label><input class="form-control" id="accountEmail" type="email" required placeholder="you@example.com"><label class="form-label mt-3" for="accountPassword">Password</label><input class="form-control" id="accountPassword" type="password" minlength="6" required placeholder="At least 6 characters"></div><div class="modal-footer"><button type="button" class="btn btn-light" data-bs-dismiss="modal">Cancel</button><button class="btn btn-primary" type="submit">Create account <i class="fa-solid fa-arrow-right ms-1"></i></button></div></form></div></div></div>
+  <div class="modal fade" id="loginModal" tabindex="-1" aria-labelledby="loginModalLabel" aria-hidden="true"><div class="modal-dialog modal-dialog-centered"><div class="modal-content"><div class="modal-header"><div><span class="section-kicker">Welcome back</span><h3 class="modal-title" id="loginModalLabel">Sign in to Finora</h3></div><button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button></div><form id="loginForm"><div class="modal-body"><label class="form-label" for="loginEmail">Email address</label><input class="form-control" id="loginEmail" type="email" required placeholder="you@example.com"><label class="form-label mt-3" for="loginPassword">Password</label><input class="form-control" id="loginPassword" type="password" required placeholder="Your password"><div class="mt-2 text-danger small d-none" id="loginError"></div><div class="d-flex justify-content-end mt-2"><button type="button" class="btn btn-link p-0 text-decoration-none d-none" id="forgotPasswordLink">Forgot password?</button></div><div class="account-note"><i class="fa-solid fa-lock"></i> Authentication and email verification are provided by Supabase.</div></div><div class="modal-footer"><button type="button" class="btn btn-light" data-bs-dismiss="modal">Cancel</button><button class="btn btn-primary" type="submit">Sign in <i class="fa-solid fa-arrow-right ms-1"></i></button></div></form></div></div></div>
+  <div class="modal fade" id="emailVerificationModal" tabindex="-1" aria-labelledby="emailVerificationTitle" data-bs-backdrop="static" data-bs-keyboard="false" aria-hidden="true"><div class="modal-dialog modal-dialog-centered"><div class="modal-content"><div class="modal-header"><div><span class="section-kicker">Secure your account</span><h3 class="modal-title" id="emailVerificationTitle">Verify your email</h3></div></div><div class="modal-body"><p id="emailVerificationIntro">We sent a 6-digit code to your email address.</p><label class="form-label" for="verificationEmail">Email address</label><input class="form-control" id="verificationEmail" type="email" maxlength="190" autocomplete="email" required><label class="form-label mt-3" for="verificationOtp">6-digit code</label><input class="form-control" id="verificationOtp" type="text" inputmode="numeric" autocomplete="one-time-code" pattern="[0-9]{6}" maxlength="6" required><div class="d-flex gap-2 mt-3"><button type="button" class="btn btn-primary" id="verifyEmailButton">Verify email</button><button type="button" class="btn btn-outline-primary" id="resendVerificationButton">Resend code</button></div><button type="button" class="btn btn-link px-0 mt-2" id="changeVerificationEmailButton">Wrong email? Change it</button><div class="settings-message mt-2" id="emailVerificationMessage" role="status" aria-live="polite"></div></div><div class="modal-footer"><button type="button" class="btn btn-light" id="emailVerificationSignOut">Sign out</button></div></div></div></div>
+  <div class="modal fade" id="forgotPasswordModal" tabindex="-1" aria-labelledby="forgotPasswordLabel" aria-hidden="true"><div class="modal-dialog modal-dialog-centered"><div class="modal-content"><div class="modal-header"><div><span class="section-kicker">Account recovery</span><h3 class="modal-title" id="forgotPasswordLabel">Reset your password</h3></div><button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button></div><form id="forgotPasswordForm"><div class="modal-body"><div id="forgotPasswordInitialStep"><label class="form-label" for="forgotPasswordEmail">Email address on your account</label><input class="form-control" id="forgotPasswordEmail" type="email" required placeholder="you@example.com"></div><div class="d-none" id="forgotPasswordOtpStep"><div id="forgotPasswordOtpGroup"><label class="form-label" for="forgotPasswordOtp">6-digit code sent to your email</label><input class="form-control" id="forgotPasswordOtp" type="text" inputmode="numeric" maxlength="6" placeholder="Enter your 6-digit code"></div><label class="form-label mt-3" for="forgotPasswordNewPassword">New password</label><input class="form-control" id="forgotPasswordNewPassword" type="password" minlength="6" placeholder="At least 6 characters"></div><p class="account-note mt-3 mb-0" id="forgotPasswordMessage"><i class="fa-solid fa-envelope"></i> A password reset code will be sent to your email address.</p></div><div class="modal-footer"><button type="button" class="btn btn-light" data-bs-dismiss="modal" aria-label="Close">Cancel</button><button type="button" class="btn btn-primary" id="forgotPasswordSendButton">Send code</button><button type="submit" class="btn btn-success d-none" id="forgotPasswordSubmitButton">Reset password</button></div></form></div></div></div>
+  <div class="modal fade onboarding-modal" id="onboardingModal" tabindex="-1" aria-labelledby="onboardingLabel" data-bs-backdrop="static" data-bs-keyboard="false"><div class="modal-dialog modal-dialog-centered modal-lg"><div class="modal-content"><div class="modal-header onboarding-header"><div><span class="section-kicker">Your money, your rules</span><h3 class="modal-title" id="onboardingLabel">Build your financial blueprint</h3></div><span class="wizard-step-label" id="wizardStepLabel">1 of 5</span><button class="btn-close" id="closeOnboardingButton" type="button" aria-label="Close setup"></button></div><div class="wizard-progress"><div id="wizardProgress"></div></div><form id="onboardingForm"><div class="modal-body"><section class="wizard-step active" data-step="1"><span class="wizard-icon"><i class="fa-solid fa-wallet"></i></span><h4>What comes in each month?</h4><p>Give Finora a starting point for more useful forecasts.</p><div class="row g-3"><div class="col-md-6"><label class="form-label" for="setupSalary">Monthly salary</label><input class="form-control setup-income" id="setupSalary" type="number" min="0" step="0.01" value="0"></div><div class="col-md-6"><label class="form-label" for="setupFreelance">Freelancing income</label><input class="form-control setup-income" id="setupFreelance" type="number" min="0" step="0.01" value="0"></div><div class="col-md-6"><label class="form-label" for="setupBusiness">Business income</label><input class="form-control setup-income" id="setupBusiness" type="number" min="0" step="0.01" value="0"></div><div class="col-md-6"><label class="form-label" for="setupOther">Other income</label><input class="form-control setup-income" id="setupOther" type="number" min="0" step="0.01" value="0"></div></div><div class="setup-total">Estimated monthly income <strong id="setupIncomeTotal">Rs 0.00</strong></div></section><section class="wizard-step" data-step="2"><span class="wizard-icon"><i class="fa-solid fa-bullseye"></i></span><h4>What are you working toward?</h4><p>These goals shape your savings recommendations.</p><div class="row g-3"><div class="col-md-6"><label class="form-label" for="setupSavings">Monthly savings goal</label><input class="form-control" id="setupSavings" type="number" min="0" step="0.01" value="0"></div><div class="col-md-6"><label class="form-label" for="setupSavingsPct">Target savings percentage</label><div class="input-group"><input class="form-control" id="setupSavingsPct" type="number" min="0" max="100" value="20"><span class="input-group-text">%</span></div></div><div class="col-md-6"><label class="form-label" for="setupEmergency">Emergency fund target</label><input class="form-control" id="setupEmergency" type="number" min="0" step="0.01" value="0"></div><div class="col-md-6"><label class="form-label" for="setupDeadline">Goal deadline</label><input class="form-control" id="setupDeadline" type="date"></div></div></section><section class="wizard-step" data-step="3"><span class="wizard-icon"><i class="fa-solid fa-chart-line"></i></span><h4>How will you grow your money?</h4><p>Choose any investment paths you are exploring.</p><label class="form-label" for="setupInvestment">Monthly investment amount</label><input class="form-control mb-3" id="setupInvestment" type="number" min="0" step="0.01" value="0"><div class="choice-grid">SIP|Mutual Funds|Stocks|Gold|Crypto|Fixed Deposit|PPF</div></section><section class="wizard-step" data-step="4"><span class="wizard-icon"><i class="fa-solid fa-chart-pie"></i></span><h4>How should your budget flow?</h4><p>Set percentages now. You can fine-tune them from Budgets.</p><div class="allocation-grid">Food|Travel|Shopping|Rent|Bills|Entertainment|Education|Health|Family|Others</div><canvas id="allocationChart" height="190"></canvas></section><section class="wizard-step" data-step="5"><span class="wizard-icon"><i class="fa-solid fa-compass"></i></span><h4>Tell us your money personality</h4><p>Finora uses this to tune the tone of your recommendations.</p><label class="form-label" for="setupLifestyle">Your lifestyle</label><select class="form-select mb-3" id="setupLifestyle"><option value="student">Student</option><option value="working_professional" selected>Working Professional</option><option value="self_employed">Self Employed</option><option value="freelancer">Freelancer</option></select><label class="form-label" for="setupStyle">Spending style</label><div class="style-options"><label><input type="radio" name="setupStyle" value="saver"> Saver</label><label><input type="radio" name="setupStyle" value="balanced" checked> Balanced</label><label><input type="radio" name="setupStyle" value="spender"> Spender</label></div></section></div><div class="modal-footer wizard-footer"><button type="button" class="btn btn-light" id="wizardBack">Back</button><button type="button" class="btn btn-primary" id="wizardNext">Continue <i class="fa-solid fa-arrow-right ms-1"></i></button><button type="submit" class="btn btn-primary d-none" id="wizardSave">Save blueprint <i class="fa-solid fa-check ms-1"></i></button></div></form></div></div></div>
+  <div class="toast-container position-fixed bottom-0 end-0 p-3"><div id="liveToast" class="toast" role="alert"><div class="toast-body"><i class="fa-solid fa-circle-check me-2"></i>Transaction added successfully.</div></div></div>
+  <div class="jarvis-chat-widget" id="jarvisChatWidget">
+    <button class="jarvis-toggle" id="jarvisToggle" type="button" aria-expanded="false"><img src="assets/img/jarvis.svg" alt="" aria-hidden="true"><span>Jarvis</span></button>
+    <div class="jarvis-window" id="jarvisWindow">
+      <div class="jarvis-header">
+        <div class="jarvis-brand"><img src="assets/img/jarvis.svg" alt="" aria-hidden="true"> Jarvis</div>
+        <button class="jarvis-close" id="jarvisClose" type="button" aria-label="Close chat">×</button>
+      </div>
+      <div class="jarvis-messages" id="jarvisMessages">
+        <div class="jarvis-message bot"><img class="jarvis-message-avatar" src="assets/img/jarvis.svg" alt="" aria-hidden="true"><span class="jarvis-message-text">Hi! I'm Jarvis. Ask about your finances, or say things like “500 ka grocery” or “salary 30000 aayi” to preview a safe action.</span></div>
+      </div>
+      <form id="jarvisForm" class="jarvis-form">
+        <input id="jarvisInput" type="text" placeholder="Ask Jarvis..." aria-label="Ask Jarvis" />
+        <button type="submit">Ask Jarvis</button>
+      </form>
+    </div>
+  </div>
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script>if (location.protocol !== 'file:') document.write('<script src="auth/supabase-config.php"><\/script>');</script>
+  <script src="assets/js/app.js"></script>
+</body>
+</html>

@@ -1,0 +1,200 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Finora: know where your money goes</title>
+<meta name="description" content="Finora is a free personal finance app. Track expenses, set budgets, plan savings goals and see your month-end forecast, with Jarvis, an assistant that asks before it saves anything.">
+<meta property="og:title" content="Finora: know where your money goes">
+<meta property="og:description" content="Track expenses, stay on budget and reach your savings goals. Free.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Poppins:wght@600;700;800&display=swap" rel="stylesheet">
+<style>
+:root{--g1:#C026D3;--g2:#7C3AED;--g3:#4F6BED;--lime:#C8F06A;--pink:#D81B7A;--teal:#19D3C5;--ink:#15122E;--muted:#58557A;--bg:#fff;--card:#fff;--line:#E6E3F5;--soft:#F5F3FF;--ok:#12805C;--bad:#C0264B}
+@media (prefers-color-scheme:dark){:root{--ink:#F2F0FF;--muted:#B4B0D8;--bg:#0E0C21;--card:#17142F;--line:#2B2752;--soft:#13102B;--ok:#4ADE9B;--bad:#FF7A98}}
+*{box-sizing:border-box;margin:0;padding:0}
+html{scroll-behavior:smooth}
+body{font:400 1rem/1.65 Inter,system-ui,sans-serif;color:var(--ink);background:var(--bg)}
+h1,h2,h3{font-family:Poppins,Inter,system-ui,sans-serif;line-height:1.12;letter-spacing:-.02em}
+a{color:inherit}
+:focus-visible{outline:3px solid var(--lime);outline-offset:3px;border-radius:8px}
+.wrap{width:min(1120px,92%);margin-inline:auto}
+.btn{display:inline-block;font:600 1rem Poppins,sans-serif;padding:.85rem 1.5rem;border-radius:999px;text-decoration:none;border:2px solid transparent;transition:transform .15s}
+.btn:hover{transform:translateY(-2px)}
+.btn-pink{background:var(--pink);color:#fff;box-shadow:0 10px 24px -8px rgba(216,27,122,.7)}
+.btn-ghost{border-color:rgba(255,255,255,.65);color:#fff}
+.btn-teal{background:var(--teal);color:#06211F;padding:.55rem 1.2rem;font-size:.92rem}
+.hero{position:relative;color:#fff;background:radial-gradient(60% 50% at 85% 10%,rgba(25,211,197,.35),transparent 70%),linear-gradient(135deg,var(--g1),var(--g2) 55%,var(--g3));padding-bottom:9rem;overflow:hidden}
+nav{display:flex;align-items:center;justify-content:space-between;padding:1.3rem 0}
+.logo{font:800 1.6rem Poppins,sans-serif;text-decoration:none;color:#fff}
+.logo i{color:var(--lime);font-style:normal}
+nav ul{display:flex;gap:1.8rem;list-style:none;align-items:center}
+nav ul a{text-decoration:none;font-weight:500;opacity:.92}
+nav ul a:hover{opacity:1;text-decoration:underline}
+.hero-grid{display:grid;grid-template-columns:1.05fr .95fr;gap:2rem;align-items:center;padding-top:3rem}
+h1{font-size:clamp(2.4rem,5.2vw,4.1rem);font-weight:800;max-width:14ch}
+.sub{font-size:1.15rem;max-width:44ch;margin:1.4rem 0 2rem;opacity:.95}
+.cta{display:flex;gap:.9rem;flex-wrap:wrap}
+.facts{margin-top:1.6rem;display:flex;gap:1.2rem;flex-wrap:wrap;font-size:.92rem;opacity:.95}
+.facts span::before{content:"✓";color:var(--lime);font-weight:700;margin-right:.4rem}
+.stage{position:relative;display:flex;justify-content:center;min-height:540px}
+.phone{width:290px;height:540px;border-radius:42px;background:#0D0B1F;padding:11px;box-shadow:0 40px 70px -20px rgba(8,4,40,.7);transform:rotate(3deg)}
+.screen{height:100%;border-radius:32px;background:#F7F6FF;color:#15122E;padding:18px 15px;overflow:hidden;position:relative}
+.screen small{color:#58557A}
+.bal{margin:10px 0;border-radius:18px;padding:14px;background:linear-gradient(135deg,#1A1646,#3B2E9E);color:#fff}
+.bal b{display:block;font:700 1.55rem Poppins,sans-serif;margin-top:2px}
+.ring-row{display:flex;gap:12px;align-items:center;background:#fff;border-radius:16px;padding:12px;margin-bottom:10px}
+.ring-row b{font:700 .95rem Poppins,sans-serif}
+.tx{display:flex;justify-content:space-between;background:#fff;border-radius:14px;padding:10px 12px;margin-bottom:8px;font-size:.84rem}
+.tx em{font-style:normal;font-weight:600}
+.neg{color:#C0264B}.pos{color:#12805C}
+.samp{position:absolute;bottom:10px;left:0;right:0;text-align:center;font-size:.7rem;color:#58557A}
+.chip{position:absolute;background:#fff;color:#15122E;border-radius:16px;padding:.7rem .9rem;font-size:.84rem;box-shadow:0 18px 34px -12px rgba(8,4,40,.5);max-width:220px}
+.chip b{font-family:Poppins,sans-serif}
+.chip.j{left:-6px;top:110px}
+.chip.f{right:-4px;bottom:90px}
+.chip .ok{display:inline-block;margin-top:.45rem;background:var(--lime);border-radius:999px;padding:.15rem .7rem;font-weight:600;font-size:.78rem}
+@media (prefers-reduced-motion:no-preference){.chip.j{animation:fl 5s ease-in-out infinite}.chip.f{animation:fl 6s ease-in-out infinite reverse}}
+@keyframes fl{50%{transform:translateY(-10px)}}
+.wave{position:absolute;bottom:-1px;left:0;width:100%;height:110px;display:block}
+.wave path{fill:var(--bg)}
+section{padding:4.5rem 0}
+h2{font-size:clamp(1.8rem,3.6vw,2.6rem);font-weight:700;max-width:20ch}
+.lead{color:var(--muted);max-width:56ch;margin-top:.9rem}
+.bento{display:grid;grid-template-columns:repeat(6,1fr);gap:1.1rem;margin-top:2.4rem}
+.b{border:1px solid var(--line);border-radius:22px;padding:1.5rem;background:var(--card)}
+.b h3{font-size:1.2rem;margin:.7rem 0 .4rem}
+.b p{color:var(--muted);font-size:.97rem}
+.ic{width:44px;height:44px;border-radius:14px;display:grid;place-items:center;font-size:1.3rem;background:var(--soft)}
+.b1{grid-column:span 3;background:linear-gradient(135deg,var(--g2),var(--g3));color:#fff;border:0}
+.b1 p{color:rgba(255,255,255,.92)}.b1 .ic{background:rgba(255,255,255,.2)}
+.b2{grid-column:span 3}.b3,.b4,.b5{grid-column:span 2}
+.b6{grid-column:span 4;display:flex;gap:1.2rem;align-items:center;justify-content:space-between;flex-wrap:wrap}
+.meter{height:12px;border-radius:99px;background:var(--line);overflow:hidden;margin-top:1rem}
+.meter span{display:block;height:100%;width:100%;background:linear-gradient(90deg,var(--g1),var(--bad))}
+.steps{display:grid;grid-template-columns:repeat(3,1fr);gap:2rem;margin-top:2.4rem;counter-reset:s}
+.steps li{list-style:none;border-top:3px solid var(--g2);padding-top:1rem;counter-increment:s}
+.steps li::before{content:counter(s);font:800 2.2rem Poppins,sans-serif;color:var(--g2)}
+.steps h3{font-size:1.15rem;margin:.3rem 0}.steps p{color:var(--muted)}
+.jarvis{background:var(--soft)}
+.jgrid{display:grid;grid-template-columns:1fr 1fr;gap:3rem;align-items:center}
+.chat{background:var(--card);border:1px solid var(--line);border-radius:26px;padding:1.3rem;display:grid;gap:.7rem}
+.m{padding:.7rem 1rem;border-radius:18px;max-width:85%;font-size:.95rem}
+.me{background:var(--g2);color:#fff;justify-self:end}
+.bot{background:var(--soft);border:1px solid var(--line)}
+.chat small{color:var(--muted);text-align:center}
+details{border-bottom:1px solid var(--line);padding:1.1rem 0}
+summary{font:600 1.05rem Poppins,sans-serif;cursor:pointer}
+details p{color:var(--muted);margin-top:.6rem;max-width:62ch}
+.faq{max-width:760px;margin-top:1.8rem}
+.final{background:linear-gradient(135deg,var(--g1),var(--g2) 55%,var(--g3));color:#fff;text-align:center;border-radius:32px;padding:3.4rem 1.5rem}
+.final h2{margin-inline:auto}.final p{margin:.9rem auto 1.8rem;max-width:46ch}
+footer{padding:2.5rem 0;color:var(--muted);font-size:.92rem;display:flex;justify-content:space-between;flex-wrap:wrap;gap:1rem}
+@media (max-width:880px){.hero-grid,.jgrid{grid-template-columns:1fr}.stage{min-height:560px}nav ul li:not(:last-child){display:none}.bento{grid-template-columns:1fr}.b1,.b2,.b3,.b4,.b5,.b6{grid-column:auto}.steps{grid-template-columns:1fr}.hero{padding-bottom:7rem}}
+</style>
+</head>
+<body>
+<header class="hero">
+  <div class="wrap">
+    <nav aria-label="Main">
+      <a class="logo" href="#top">finora<i>.</i></a>
+      <ul>
+        <li><a href="#features">Features</a></li>
+        <li><a href="#how">How it works</a></li>
+        <li><a href="#jarvis">Jarvis</a></li>
+        <li><a href="#faq">FAQ</a></li>
+        <li><a class="btn btn-teal" href="index.html#signin" data-auth="signin">Sign in</a></li>
+      </ul>
+    </nav>
+    <div class="hero-grid" id="top">
+      <div>
+        <h1>Your money, finally making sense.</h1>
+        <p class="sub">Track spending, stay inside your budget and reach your savings goals. Jarvis answers from your real numbers and asks before it saves anything.</p>
+        <div class="cta">
+          <a class="btn btn-pink" href="index.html#signup" data-auth="signup">Start free</a>
+          <a class="btn btn-ghost" href="index.html#demo" data-auth="demo">Try the demo</a>
+        </div>
+        <div class="facts"><span>Free to use</span><span>Email-verified accounts</span><span>You confirm every Jarvis action</span></div>
+      </div>
+      <div class="stage" aria-hidden="true">
+        <div class="phone"><div class="screen">
+          <small>This month</small>
+          <div class="bal"><small style="color:#CFC9FF">Total balance</small><b>Rs 37,677.82</b></div>
+          <div class="ring-row">
+            <svg width="52" height="52" viewBox="0 0 36 36"><circle cx="18" cy="18" r="15" fill="none" stroke="#E6E3F5" stroke-width="5"/><circle cx="18" cy="18" r="15" fill="none" stroke="#D81B7A" stroke-width="5" stroke-linecap="round" stroke-dasharray="68 94" transform="rotate(-90 18 18)"/></svg>
+            <div><b>72% of budget used</b><br><small>Rs 21,600 of Rs 30,000</small></div>
+          </div>
+          <div class="tx"><span>Swiggy<br><small>Food &amp; dining</small></span><em class="neg">-Rs 250</em></div>
+          <div class="tx"><span>Salary<br><small>Income</small></span><em class="pos">+Rs 30,000</em></div>
+          <div class="tx"><span>Uber<br><small>Transport</small></span><em class="neg">-Rs 200</em></div>
+          <div class="samp">Sample data</div>
+        </div></div>
+        <div class="chip j"><b>Jarvis</b><br>Add Rs 500 for groceries today?<br><span class="ok">Confirm</span></div>
+        <div class="chip f"><b>Month-end forecast</b><br>About Rs 36,000. Rs 6,000 over budget.</div>
+      </div>
+    </div>
+  </div>
+  <svg class="wave" viewBox="0 0 1440 110" preserveAspectRatio="none" aria-hidden="true"><path d="M0 60C180 110 360 10 600 40s420 80 640 40c90-16 150-30 200-20v50H0z"/></svg>
+</header>
+
+<main>
+<section id="features"><div class="wrap">
+  <h2>Everything you need to stay in control</h2>
+  <p class="lead">Built for everyday money: salary in, bills out, and what is left to save.</p>
+  <div class="bento">
+    <article class="b b1"><div class="ic" aria-hidden="true">💬</div><h3>Jarvis, your assistant</h3><p>Type "500 ka grocery" or "salary 30000 aayi". Jarvis shows a preview card and saves only after you confirm. You can undo what it just added.</p></article>
+    <article class="b b2"><div class="ic" aria-hidden="true">🎯</div><h3>Budgets that warn you</h3><p>Set a monthly budget and a limit for each category. Anything over its limit turns red, with the exact amount.</p><div class="meter" aria-hidden="true"><span></span></div></article>
+    <article class="b b3"><div class="ic" aria-hidden="true">📈</div><h3>Month-end forecast</h3><p>Recurring bills like EMIs are counted once, so one big payment never inflates the estimate.</p></article>
+    <article class="b b4"><div class="ic" aria-hidden="true">🏁</div><h3>Savings goals</h3><p>Name a goal, add contributions and see how much to save each month to hit your date.</p></article>
+    <article class="b b5"><div class="ic" aria-hidden="true">📊</div><h3>Reports and export</h3><p>See spending by category, pick any date range and download your transactions as CSV.</p></article>
+    <article class="b b6"><div><div class="ic" aria-hidden="true">🔐</div><h3>Your data stays yours</h3><p>Accounts need a verified email, and every list you see is filtered to your account only.</p></div></article>
+  </div>
+</div></section>
+
+<section id="how" style="padding-top:1rem"><div class="wrap">
+  <h2>Set up in three steps</h2>
+  <ol class="steps">
+    <li><h3>Create your account</h3><p>Sign up and verify your email with a 6-digit code.</p></li>
+    <li><h3>Tell Finora your numbers</h3><p>Add your monthly income, budget and savings goal.</p></li>
+    <li><h3>Log as you spend</h3><p>Add expenses by hand or just tell Jarvis. Your dashboard updates right away.</p></li>
+  </ol>
+</div></section>
+
+<section class="jarvis" id="jarvis"><div class="wrap jgrid">
+  <div>
+    <h2>Ask Jarvis instead of digging through screens</h2>
+    <p class="lead">"Where am I overspending?" "Can I afford Rs 5,000?" Jarvis answers from your own transactions. If your data is too thin to say something useful, it tells you so.</p>
+  </div>
+  <div class="chat" role="img" aria-label="Sample chat with Jarvis">
+    <div class="m me">where am I overspending</div>
+    <div class="m bot">Transport is Rs 30,500 of your Rs 34,271 spending this month, about 89%. Most of it is one EMI payment.</div>
+    <div class="m me">add 150 for coffee</div>
+    <div class="m bot">Add expense: coffee, Rs 150, Food &amp; dining, today. Confirm or cancel?</div>
+    <small>Sample conversation</small>
+  </div>
+</div></section>
+
+<section id="faq"><div class="wrap">
+  <h2>Questions, answered</h2>
+  <div class="faq">
+    <details><summary>Is Finora free?</summary><p>Yes. Every feature is free for now, and we do not take any payment.</p></details>
+    <details><summary>Does Jarvis change my data on its own?</summary><p>No. Jarvis shows a preview and saves only after you confirm. It cannot delete transactions or change your password.</p></details>
+    <details><summary>Why do I need to verify my email?</summary><p>It keeps your account yours and lets you reset your password if you forget it.</p></details>
+    <details><summary>Does Finora move my money?</summary><p>No. Finora records and analyses your spending. It never connects to your bank or makes payments.</p></details>
+  </div>
+</div></section>
+
+<section style="padding-top:0"><div class="wrap">
+  <div class="final">
+    <h2>Start with this month</h2>
+    <p>Create a free account, add your income and see where your money goes.</p>
+    <a class="btn btn-pink" href="index.html#signup" data-auth="signup">Start free</a>
+  </div>
+</div></section>
+</main>
+
+<div class="wrap"><footer><span>finora. Personal finance, made clear.</span><span id="yr"></span></footer></div>
+<script>document.getElementById('yr').textContent='© '+new Date().getFullYear()+' Finora';</script>
+</body>
+</html>
