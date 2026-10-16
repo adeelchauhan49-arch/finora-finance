@@ -1,37 +1,39 @@
-# Finance-AI configuration
+# Finora setup
 
-Install the PHP dependencies from the project directory:
+Finora is a static HTML/CSS/JavaScript frontend. Sign-in and user-owned data use Supabase directly; there is no PHP app server or local database.
+
+## Frontend
+
+1. Serve the project root over HTTP with a static web server, or use XAMPP Apache to serve the HTML assets. PHP is not required.
+2. Set the Supabase project URL and publishable key in `assets/js/supabase-config.js`. The publishable key is designed for browser use; never put a service-role key or provider secret in this file.
+3. Set the Supabase Auth Site URL and allowed redirect URLs to the local and deployed frontend URLs. Keep email confirmations enabled and configure Supabase Auth email templates for the confirmation and password-recovery code/link flows.
+4. Apply the migrations in `supabase/migrations` in timestamp order. The second migration enables browser access only to owner-scoped tables through RLS. Do not enable direct access to service-only tables or disable RLS.
+
+## Supabase Edge Functions
+
+Deploy the functions using the Supabase CLI:
 
 ```powershell
-composer install
+supabase functions deploy jarvis
+supabase functions deploy jarvis-action
+supabase functions deploy pro-status
+supabase functions deploy pro-create-order
+supabase functions deploy pro-verify-payment
 ```
 
-Copy `.env.example` to `.env` and set values for your mail provider. Use SMTP with TLS on port 587 (or SSL on port 465 if required by your provider). Set `SMTP_FROM_ADDRESS` to a sender address that the provider has authorized. Password reset fails with a generic error if delivery is not configured; OTP values are never returned in production.
+Configure secrets in the Supabase project, not in this frontend directory:
 
-To enable AI replies, set `JARVIS_API_KEY` to an API key for OpenAI and choose a supported chat model in `JARVIS_MODEL`. The PHP server sends the request to OpenAI; the browser never receives the key. Without a key, Jarvis continues to answer using its built-in help responses.
+- `JARVIS_API_KEY` and optionally `JARVIS_MODEL` for Jarvis responses.
+- `FINORA_PRO_ENABLED=true` to enable Pro. It is disabled unless explicitly enabled.
+- `RAZORPAY_KEY_ID` and `RAZORPAY_KEY_SECRET` for Pro payments.
+- `FINORA_PRO_PROMO_CODE` optionally enables one-time Pro promotion-code redemption.
 
-An optional Pro promotion code can be configured with `FINORA_PRO_PROMO_CODE`. It is disabled when the setting is blank (the default); do not add the code to application source or client-side files.
+The Edge Functions use the Supabase service-role key only inside the hosted function runtime; it must never be put in frontend code, checked into source control, or sent to a browser. Configure and deploy secrets after rotating any credentials that were previously stored in `.env`.
 
-Finora Pro features and payment endpoints are controlled by `FINORA_PRO_ENABLED`. It defaults to `false`, which makes the product features available without Pro and disables Pro order, verification, and status endpoints. Set it to `true` to restore Pro subscription checks and payment flows.
+## Tests
 
-Run `database/jarvis_rate_limits.sql` against the `finance_ai` database to enable Jarvis's per-user request limit. Jarvis builds its answers from the signed-in user's transactions and monthly budget; without an API key it uses the built-in data-grounded response engine.
+Run the frontend and migration contract tests with:
 
-Run `database/jarvis_safe_actions.sql` after the existing transaction, financial-profile, savings-goal, and contribution migrations to enable confirmed Jarvis actions, action auditing/rate limits, and the default-off auto-add setting. Jarvis actions remain restricted to active Pro accounts. Auto-add is disabled by default; when explicitly enabled in Settings, only expense/income entries at or below the user's configured limit are added automatically and can be undone for 10 minutes.
-
-Before importing `database/onboarding_completed.sql`, run the read-only `database/onboarding_completed_preview.sql` in phpMyAdmin against `finance_ai` and review both counts. The migration marks a profile completed only when `monthly_income > 0`; profiles with income `0` or NULL remain incomplete, including auto-created rows with the default monthly budget. Import `database/onboarding_completed.sql` in phpMyAdmin only after reviewing the preview results. Do not treat the preview query as the migration.
-
-For local OTP testing only, set `APP_ENV=local` and `ALLOW_DEBUG_OTP=true`. This enables the response to include the OTP when SMTP delivery fails. Keep `ALLOW_DEBUG_OTP=false` in every deployed environment.
-
-## Supabase Auth and database
-
-The app uses Supabase Auth for signup, sign-in, email confirmation, password recovery, and email/password changes. Its PHP data endpoints connect to Supabase Postgres over PDO and keep user ownership scoped with row-level security. The browser receives only the Supabase project URL and publishable key; the database password and service-role key must remain server-side.
-
-1. In your private `.env` (do not share it), configure `SUPABASE_URL`, `SUPABASE_PUBLISHABLE_KEY`, `SUPABASE_SITE_URL`, and `SUPABASE_DB_URL` from the Supabase project dashboard. Add `SUPABASE_SERVICE_ROLE_KEY` only for the one-time existing-data migration.
-2. Enable the PHP `pdo_pgsql` extension in XAMPP's `php.ini`, restart Apache, and confirm `php -m` lists `pdo_pgsql`.
-3. Review and apply `supabase/migrations/20261014000000_finora_supabase.sql` in the Supabase SQL editor. This creates the app schema, Auth-to-profile trigger, owner policies, and a restricted PHP API role. Do not run the app against the hosted database before this migration completes.
-4. Configure Supabase Auth's Site URL and redirect URLs for the deployed app. Keep email confirmations enabled, and configure the confirmation and recovery templates to support the Supabase code/link flow.
-5. Before moving existing data, back up MySQL and run `database/supabase_mysql_migration_preview.sql` against `finance_ai`. Review the row counts. Then populate the `LEGACY_DB_*` settings in `.env` and run the migration script without `--apply` to review its dry-run counts.
-6. Only after reviewing the preview and verifying email delivery, run `php scripts/migrate_mysql_to_supabase.php --apply` from the project directory and type `IMPORT` at its confirmation prompt. The importer links legacy numeric user IDs to Supabase UUID identities, remaps owned rows, preserves pending email changes, and sends verified users a password-recovery link. Old password hashes are intentionally not imported. Unverified users remain unverified and receive a Supabase confirmation link. Ephemeral OTPs, rate limits, undo tokens, and pending Jarvis proposals are not transferred.
-7. Keep the MySQL backup until verifying the Supabase row counts and owner isolation. The importer never deletes or modifies source MySQL data. Auth accounts created before an interrupted import cannot be rolled back automatically; resolve the printed conflict before retrying.
-
-The Supabase VS Code extension message “Could not connect to local Supabase project. Make sure you've run `supabase start`!” refers to the *local* stack, not your hosted project. This repository now has `supabase/config.toml`; to run a local stack, install the Supabase CLI and Docker Desktop, then run `supabase start`. For the hosted project, use the dashboard SQL editor or link the CLI to the hosted project; do not run `supabase start` to connect to the hosted database.
+```powershell
+python -m unittest discover -s tests
+```

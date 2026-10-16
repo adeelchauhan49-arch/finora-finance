@@ -1,5 +1,6 @@
 document.addEventListener('DOMContentLoaded', () => {
   const supabaseConfig = window.FINORA_SUPABASE_CONFIG || {};
+  const proEnabled = supabaseConfig.proEnabled === true;
   const supabaseClient = window.supabase?.createClient
     && typeof supabaseConfig.url === 'string'
     && typeof supabaseConfig.publishableKey === 'string'
@@ -86,7 +87,7 @@ document.addEventListener('DOMContentLoaded', () => {
   let transactions = storedTransactions ? JSON.parse(storedTransactions) : seededTransactions;
   let monthEndForecast = null;
   let activeUser = null;
-  let serverUserAuthenticated = false;
+  let supabaseUserAuthenticated = false;
   const updateProAvailability = (enabled) => {
     const upgradeCard = document.querySelector('.upgrade-card');
     if (upgradeCard) upgradeCard.hidden = enabled !== true;
@@ -198,31 +199,435 @@ document.addEventListener('DOMContentLoaded', () => {
     });
     return candidates.size === 1 ? { category: [...candidates][0], source: 'fuzzy', uncertain: false } : { category: 'Other', uncertain: true };
   };
-  const apiRequest = async (path, options) => {
-    const sessionResult = supabaseClient ? await supabaseClient.auth.getSession() : { data: { session: null } };
-    const accessToken = sessionResult.data.session?.access_token;
-    const response = await fetch(path, {
-      ...options,
-      headers: {
-        'Content-Type': 'application/json',
-        ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {}),
-        ...(options?.headers || {})
-      },
-      credentials: 'same-origin'
+  const getAppUser = async () => {
+    if (!supabaseClient) return null;
+    const { data: { session }, error: sessionError } = await supabaseClient.auth.getSession();
+    if (sessionError) throw sessionError;
+    if (!session?.user) return null;
+    const { data, error } = await supabaseClient
+      .from('users')
+      .select('id, name, email, pending_email, email_verified_at')
+      .eq('auth_user_id', session.user.id)
+      .single();
+    if (error) throw new Error(`Could not load your Supabase profile: ${error.message}`);
+    return {
+      id: Number(data.id),
+      name: data.name,
+      email: data.email,
+      pending_email: data.pending_email,
+      email_verified_at: session.user.email_confirmed_at || session.user.confirmed_at || null
+    };
+  };
+  const requireAppUser = async () => {
+    const user = await getAppUser();
+    if (!user) throw new Error('Sign in to continue.');
+    if (!user.email_verified_at) throw new Error('Please verify your email first.');
+    return user;
+  };
+  const unwrapSupabase = ({ data, error }) => {
+    if (error) throw error;
+    return data;
+  };
+  const normalizeMerchant = (merchant) => merchant.toLowerCase()
+    .replace(/[\p{N}\p{P}\p{S}]+/gu, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+  const isValidIsoDate = (value) => {
+    if (typeof value !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
+    const date = new Date(`${value}T00:00:00Z`);
+    return Number.isFinite(date.getTime()) && date.toISOString().slice(0, 10) === value;
+  };
+  const forecastMonthEnd = (items, profile) => {
+    const now = new Date();
+    const today = formatLocalDate(now);
+    const monthStart = `${today.slice(0, 8)}01`;
+    const dayCount = now.getDate();
+    const daysInMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate();
+    const currentExpenses = items.filter((item) => item.type === 'expense' && item.date >= monthStart && item.date <= today);
+    const currentSpending = currentExpenses.reduce((sum, item) => sum + Number(item.amount || 0), 0);
+    const historyStart = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 89);
+    const dailyTotals = new Map();
+    items.forEach((item) => {
+      if (item.type !== 'expense' || item.date < formatLocalDate(historyStart) || item.date > today) return;
+      dailyTotals.set(item.date, (dailyTotals.get(item.date) || 0) + Number(item.amount || 0));
     });
-    const payload = await response.json();
-    if (!response.ok || !payload.ok) {
-      const error = new Error(payload.message || payload.error || 'Unable to connect to the server.');
-      error.status = response.status;
-      error.payload = payload;
-      throw error;
+    const dailyValues = [];
+    for (let offset = 89; offset >= 0; offset -= 1) {
+      const date = new Date(now.getFullYear(), now.getMonth(), now.getDate() - offset);
+      dailyValues.push(dailyTotals.get(formatLocalDate(date)) || 0);
     }
-    return payload;
+    const average = dailyValues.reduce((sum, value) => sum + value, 0) / 90;
+    const variance = dailyValues.reduce((sum, value) => sum + (value - average) ** 2, 0) / 90;
+    const remainingDays = daysInMonth - dayCount;
+    const point = currentSpending + average * remainingDays;
+    const uncertainty = Math.sqrt(variance) * Math.sqrt(remainingDays);
+    const monthlyBudget = Number(profile?.monthly_budget) || defaultBudgetLimit;
+    const currency = profile?.currency || 'INR';
+    const symbol = currencySymbols[currency] || currency;
+    const difference = Math.abs(point - monthlyBudget);
+    const available = dayCount >= 14 && currentExpenses.length >= 10;
+    return {
+      available,
+      insufficient_data_message: 'A month-end forecast needs at least 14 days and 10 expenses this month.',
+      low: Math.max(0, point - 1.96 * uncertainty),
+      high: point + 1.96 * uncertainty,
+      point,
+      monthly_budget: monthlyBudget,
+      days_elapsed: dayCount,
+      expense_transaction_count: currentExpenses.length,
+      confidence: dayCount >= 27 && currentExpenses.length >= 40 ? 'High' : dayCount >= 21 && currentExpenses.length >= 20 ? 'Medium' : 'Low',
+      budget_comparison_text: point > monthlyBudget
+        ? `At this pace, spending is projected to be ${symbol} ${difference.toFixed(2)} over the monthly budget of ${symbol} ${monthlyBudget.toFixed(2)}.`
+        : `At this pace, about ${symbol} ${difference.toFixed(2)} of the monthly budget of ${symbol} ${monthlyBudget.toFixed(2)} may remain.`
+    };
+  };
+  const invokeSupabaseFunction = async (name, body) => {
+    const { data, error } = await supabaseClient.functions.invoke(name, { body });
+    if (error) {
+      let message = error.message || `The ${name} function failed.`;
+      if (error.context?.json) {
+        const payload = await error.context.json().catch(() => null);
+        if (payload?.message) message = payload.message;
+      }
+      throw new Error(message);
+    }
+    if (!data?.ok) throw new Error(data?.message || `The ${name} function returned an invalid response.`);
+    return data;
+  };
+  const supabaseRequest = async (resource, options = {}) => {
+    const method = options.method || 'GET';
+    const body = typeof options.body === 'string' ? JSON.parse(options.body) : (options.body || {});
+    if (!supabaseClient && location.protocol !== 'file:') throw new Error('Supabase is not configured.');
+
+    if (resource === 'session') {
+      const user = await getAppUser();
+      if (!user) return { ok: true, user: null, pro_enabled: proEnabled };
+      if (!user.email_verified_at) {
+        return { ok: true, user: null, requires_verification: true, email: user.email, pro_enabled: proEnabled };
+      }
+      return { ok: true, user, pro_enabled: proEnabled };
+    }
+
+    if (resource === 'jarvis') return invokeSupabaseFunction('jarvis', body);
+    if (resource === 'jarvis-action') return invokeSupabaseFunction('jarvis-action', body);
+    const user = await requireAppUser();
+
+    if (resource === 'category-suggestion') {
+      const merchant = String(body.merchant || '').trim();
+      if (!merchant || merchant.length > 160) throw new Error('Enter a valid merchant or transaction title.');
+      const normalized = normalizeMerchant(merchant);
+      const { data, error } = await supabaseClient.from('user_category_rules')
+        .select('category').eq('user_id', user.id).eq('merchant_normalized', normalized).maybeSingle();
+      if (error) throw error;
+      const suggestion = data
+        ? { category: data.category, source: 'personal', uncertain: false }
+        : classifyMerchant(merchant);
+      return { ok: true, suggestion: { ...suggestion, learning_available: true } };
+    }
+
+    if (resource === 'transactions') {
+      if (method === 'GET') {
+        const [transactions, profile] = await Promise.all([
+          supabaseClient.from('transactions')
+            .select('id, type, merchant, category, amount, transaction_date, transaction_time, payment_method, location, notes, category_confidence')
+            .eq('user_id', user.id)
+            .order('transaction_date', { ascending: false })
+            .order('transaction_time', { ascending: false })
+            .order('id', { ascending: false }),
+          supabaseClient.from('financial_profile').select('monthly_budget, currency').eq('user_id', user.id).maybeSingle()
+        ]);
+        const rows = unwrapSupabase(transactions);
+        const profileData = unwrapSupabase(profile);
+        const items = rows.map((item) => ({
+          id: Number(item.id),
+          type: item.type,
+          merchant: item.merchant,
+          category: item.category,
+          amount: Number(item.amount),
+          date: item.transaction_date,
+          time: item.transaction_time || '',
+          payment_method: item.payment_method || '',
+          location: item.location || '',
+          notes: item.notes || '',
+          category_confidence: Number(item.category_confidence || 0)
+        }));
+        return { ok: true, transactions: items, month_end_forecast: forecastMonthEnd(items, profileData) };
+      }
+      if (method === 'POST') {
+        const categoryConfidence = Number(body.category_confidence || 0);
+        const validDate = isValidIsoDate(body.date);
+        const values = {
+          user_id: user.id,
+          type: body.type,
+          merchant: String(body.merchant || '').trim(),
+          category: String(body.category || 'Other').trim() || 'Other',
+          amount: Number(body.amount),
+          transaction_date: body.date,
+          transaction_time: body.time || null,
+          payment_method: body.payment_method || null,
+          location: String(body.location || '').trim() || null,
+          notes: String(body.notes || '').trim() || null,
+          category_confidence: Math.max(0, Math.min(100, categoryConfidence)),
+          source: 'manual'
+        };
+        if (!['income', 'expense'].includes(values.type)
+          || !values.merchant || values.merchant.length > 160
+          || !['Food & dining', 'Shopping', 'Transport', 'Housing', 'Health', 'Utilities', 'Entertainment', 'Other', 'Salary'].includes(values.category)
+          || (values.category === 'Salary' && values.type !== 'income')
+          || !Number.isFinite(values.amount) || values.amount <= 0 || values.amount > 9999999999.99
+          || !validDate
+          || (values.transaction_time && !/^([01]\d|2[0-3]):[0-5]\d$/.test(values.transaction_time))
+          || (values.payment_method && !['cash', 'upi', 'credit_card', 'debit_card', 'wallet', 'bank_transfer'].includes(values.payment_method))
+          || (values.location && values.location.length > 160)
+          || (values.notes && values.notes.length > 500)
+          || !Number.isFinite(categoryConfidence)
+          || !Number.isFinite(values.category_confidence)) {
+          throw new Error('Enter valid transaction details.');
+        }
+        const { data, error } = await supabaseClient.from('transactions')
+          .insert(values)
+          .select('id, type, merchant, category, amount, transaction_date, transaction_time, payment_method, location, notes, category_confidence')
+          .single();
+        if (error) throw error;
+        let categoryLearning = null;
+        if (body.category_explicit === true) {
+          try {
+            const normalized = normalizeMerchant(values.merchant);
+            const { data: existingRule, error: existingError } = await supabaseClient.from('user_category_rules')
+              .select('id').eq('user_id', user.id).eq('merchant_normalized', normalized).maybeSingle();
+            if (existingError) throw existingError;
+            const { count, error: countError } = existingRule
+              ? { count: 0, error: null }
+              : await supabaseClient.from('user_category_rules')
+                .select('id', { count: 'exact', head: true }).eq('user_id', user.id);
+            if (countError) throw countError;
+            if (!existingRule && count >= 500) {
+              categoryLearning = { saved: false, reason: 'limit_reached' };
+            } else {
+              const { error: ruleError } = await supabaseClient.from('user_category_rules').upsert({
+                user_id: user.id, merchant_normalized: normalized, category: values.category
+              }, { onConflict: 'user_id,merchant_normalized' });
+              if (ruleError) throw ruleError;
+              categoryLearning = { saved: true, reason: 'saved' };
+            }
+          } catch (error) {
+            console.warn('Transaction saved, but the merchant preference could not be saved.', error);
+            categoryLearning = { saved: false, reason: 'save_failed' };
+          }
+        }
+        return {
+          ok: true,
+          transaction: { ...values, id: Number(data.id), amount: Number(data.amount), date: data.transaction_date, time: data.transaction_time || '' },
+          category_learning: categoryLearning
+        };
+      }
+      if (method === 'DELETE') {
+        const { data, error } = await supabaseClient.from('transactions').delete()
+          .eq('id', body.id).eq('user_id', user.id).select('id');
+        if (error) throw error;
+        if (!data.length) throw new Error('Transaction was not found.');
+        return { ok: true, message: 'Transaction deleted.' };
+      }
+    }
+
+    if (resource === 'onboarding') {
+      if (method === 'GET') {
+        const [profile, investments, goals] = await Promise.all([
+          supabaseClient.from('financial_profile').select('*').eq('user_id', user.id).maybeSingle(),
+          supabaseClient.from('investment_plan').select('monthly_amount, investment_type').eq('user_id', user.id).order('id'),
+          supabaseClient.from('savings_goals').select('id, title, target_amount, current_amount, deadline')
+            .eq('user_id', user.id).order('deadline', { ascending: true, nullsFirst: false }).limit(20)
+        ]);
+        return {
+          ok: true,
+          profile: unwrapSupabase(profile),
+          investment_plans: unwrapSupabase(investments) || [],
+          savings_goals: unwrapSupabase(goals) || []
+        };
+      }
+      if (method === 'POST') {
+        const { error } = await supabaseClient.rpc('finora_save_onboarding', {
+          p_name: body.full_name || '',
+          p_profile: body,
+          p_investments: body.investment_types || []
+        });
+        if (error) throw error;
+        return { ok: true, message: 'Your financial setup is saved.' };
+      }
+    }
+
+    if (resource === 'settings') {
+      if (method === 'GET') {
+        const [profile, userRecord] = await Promise.all([
+          supabaseClient.from('financial_profile').select('*').eq('user_id', user.id).maybeSingle(),
+          supabaseClient.from('users').select('id, name, email, pending_email').eq('id', user.id).single()
+        ]);
+        const settings = unwrapSupabase(profile) || {};
+        return {
+          ok: true,
+          user: unwrapSupabase(userRecord),
+          settings: {
+            currency: settings.currency || 'INR',
+            monthly_budget: Number(settings.monthly_budget || defaultBudgetLimit),
+            budget_allocations: settings.budget_allocations || {},
+            jarvis_auto_add_enabled: settings.jarvis_auto_add_enabled === true,
+            jarvis_auto_add_limit: Number(settings.jarvis_auto_add_limit || 5000),
+            monthly_salary: Number(settings.monthly_salary || 0),
+            business_income: Number(settings.business_income || 0),
+            freelance_income: Number(settings.freelance_income || 0),
+            other_income: Number(settings.other_income || 0),
+            monthly_income: Number(settings.monthly_income || 0),
+            monthly_savings_goal: Number(settings.monthly_savings_goal || 0),
+            savings_percentage: Number(settings.savings_percentage || 0)
+          }
+        };
+      }
+      if (method === 'POST') {
+        if (body.action === 'profile') {
+          const name = String(body.name || '').trim();
+          if (name.length < 2 || name.length > 120) throw new Error('Enter a valid name.');
+          if (String(body.email || '').toLowerCase() !== user.email.toLowerCase()) {
+            throw new Error('Change your email through Supabase Auth, then save your profile name.');
+          }
+          const { error } = await supabaseClient.from('users').update({ name }).eq('id', user.id);
+          if (error) throw error;
+          return { ok: true, user: { ...user, name }, message: 'Saved successfully.', verification_required: false };
+        }
+        if (body.action === 'financial_profile') {
+          const fields = ['monthly_salary', 'business_income', 'freelance_income', 'other_income'];
+          const values = Object.fromEntries(fields.map((key) => [key, Number(body[key])]));
+          const savingsGoal = Number(body.monthly_savings_goal);
+          const savingsPercentage = Number(body.savings_percentage);
+          if (Object.values(values).some((value) => !Number.isFinite(value) || value < 0 || value > 9999999999.99)
+            || !Number.isFinite(savingsGoal) || savingsGoal < 0 || savingsGoal > 9999999999.99
+            || !Number.isFinite(savingsPercentage) || savingsPercentage < 0 || savingsPercentage > 100) {
+            throw new Error('Enter a valid savings goal and savings percentage from 0 to 100.');
+          }
+          const monthlyIncome = Object.values(values).reduce((sum, value) => sum + value, 0);
+          const { error } = await supabaseClient.from('financial_profile').upsert({
+            user_id: user.id, ...values, monthly_income: monthlyIncome,
+            monthly_savings_goal: savingsGoal, savings_percentage: savingsPercentage
+          }, { onConflict: 'user_id' });
+          if (error) throw error;
+          return { ok: true, settings: { ...values, monthly_income: monthlyIncome, monthly_savings_goal: savingsGoal, savings_percentage: savingsPercentage }, message: 'Financial profile saved successfully.' };
+        }
+        if (body.action === 'preferences') {
+          const currency = String(body.currency || '').toUpperCase();
+          const monthlyBudget = Number(body.monthly_budget);
+          const categoryLimits = body.category_limits;
+          if (!['INR', 'USD', 'EUR'].includes(currency) || !Number.isFinite(monthlyBudget)
+            || monthlyBudget < 1 || monthlyBudget > 9999999999.99
+            || !categoryLimits || typeof categoryLimits !== 'object') {
+            throw new Error('Enter a valid currency and monthly budget.');
+          }
+          const allocations = Object.fromEntries(Object.entries(categoryLimits).map(([category, amount]) => {
+            const limit = Number(amount);
+            if (!category.trim() || category.length > 80 || !Number.isFinite(limit) || limit < 0.01 || limit > 9999999999.99) {
+              throw new Error('Enter valid limits for every category.');
+            }
+            return [category, (limit / monthlyBudget) * 100];
+          }));
+          const { error } = await supabaseClient.from('financial_profile').upsert({
+            user_id: user.id, currency, monthly_budget: monthlyBudget, budget_allocations: allocations
+          }, { onConflict: 'user_id' });
+          if (error) throw error;
+          return { ok: true, settings: { currency, monthly_budget: monthlyBudget, budget_allocations: allocations }, message: 'Saved successfully.' };
+        }
+        if (body.action === 'jarvis_actions') {
+          const enabled = body.jarvis_auto_add_enabled;
+          const limit = Number(body.jarvis_auto_add_limit);
+          if (typeof enabled !== 'boolean' || !Number.isFinite(limit) || limit < 1 || limit > 9999999999.99) {
+            throw new Error('Choose whether to enable auto-add and enter a valid transaction limit.');
+          }
+          const { error } = await supabaseClient.from('financial_profile').upsert({
+            user_id: user.id, jarvis_auto_add_enabled: enabled, jarvis_auto_add_limit: limit
+          }, { onConflict: 'user_id' });
+          if (error) throw error;
+          return { ok: true, settings: { jarvis_auto_add_enabled: enabled, jarvis_auto_add_limit: limit }, message: 'Jarvis action settings saved.' };
+        }
+      }
+    }
+
+    if (resource === 'goals') {
+      if (method === 'GET') {
+        const { data: goals, error } = await supabaseClient.from('savings_goals')
+          .select('id, title, target_amount, current_amount, deadline')
+          .eq('user_id', user.id).order('deadline', { ascending: true, nullsFirst: false }).order('id', { ascending: false });
+        if (error) throw error;
+        const { data: contributions, error: contributionError } = await supabaseClient.from('savings_goal_contributions')
+          .select('id, goal_id, amount, contribution_date').eq('user_id', user.id)
+          .order('contribution_date', { ascending: false }).order('id', { ascending: false });
+        if (contributionError) throw contributionError;
+        const grouped = new Map();
+        contributions.forEach((item) => {
+          const key = Number(item.goal_id);
+          if (!grouped.has(key)) grouped.set(key, []);
+          grouped.get(key).push({ ...item, id: Number(item.id), goal_id: key, amount: Number(item.amount) });
+        });
+        return {
+          ok: true,
+          goals: goals.map((goal) => ({
+            ...goal, id: Number(goal.id), target_amount: Number(goal.target_amount),
+            current_amount: Number(goal.current_amount), contributions: grouped.get(Number(goal.id)) || []
+          }))
+        };
+      }
+      if (method === 'POST' && (body.action || 'goal') === 'goal') {
+        const title = String(body.title || '').trim();
+        const target = Number(body.target_amount);
+        const starting = Number(body.starting_amount || 0);
+        if (!title || title.length > 120 || !Number.isFinite(target) || target <= 0 || target > 9999999999.99
+          || !Number.isFinite(starting) || starting < 0 || starting > target || !isValidIsoDate(body.deadline)) {
+          throw new Error('Enter a valid goal name, target, starting amount, and target date.');
+        }
+        const { data, error } = await supabaseClient.from('savings_goals').insert({
+          user_id: user.id, title, target_amount: target, current_amount: starting, deadline: body.deadline
+        }).select('id').single();
+        if (error) throw error;
+        return { ok: true, goal_id: Number(data.id), message: 'Savings goal created.' };
+      }
+      if (method === 'POST' && body.action === 'contribution') {
+        const amount = Number(body.amount);
+        if (!Number.isInteger(Number(body.goal_id)) || Number(body.goal_id) < 1
+          || !Number.isFinite(amount) || amount <= 0 || amount > 9999999999.99
+          || !isValidIsoDate(body.date)) {
+          throw new Error('Enter a valid contribution amount and date.');
+        }
+        const { data, error } = await supabaseClient.from('savings_goal_contributions').insert({
+          user_id: user.id, goal_id: body.goal_id, amount, contribution_date: body.date
+        }).select('id').single();
+        if (error) throw error;
+        return { ok: true, contribution_id: Number(data.id), message: 'Contribution added.' };
+      }
+      if (method === 'PATCH') {
+        const { data, error } = await supabaseClient.from('savings_goals').update({
+          title: String(body.title || '').trim(), target_amount: Number(body.target_amount), deadline: body.deadline
+        }).eq('id', body.id).eq('user_id', user.id).select('id');
+        if (error) throw error;
+        if (!data.length) throw new Error('Savings goal was not found.');
+        return { ok: true, message: 'Savings goal updated.' };
+      }
+      if (method === 'DELETE') {
+        if (body.action === 'contribution') {
+          const { data, error } = await supabaseClient.rpc('finora_delete_goal_contribution', { p_contribution_id: Number(body.id) });
+          if (error) throw error;
+          if (!data) throw new Error('Contribution was not found.');
+        } else {
+          const { data, error } = await supabaseClient.from('savings_goals').delete()
+            .eq('id', body.id).eq('user_id', user.id).select('id');
+          if (error) throw error;
+          if (!data.length) throw new Error('Savings goal was not found.');
+        }
+        return { ok: true, message: body.action === 'contribution' ? 'Contribution deleted.' : 'Savings goal deleted.' };
+      }
+    }
+
+    throw new Error(`Unsupported Supabase operation: ${resource}.`);
   };
   const getMerchantSuggestion = async (merchant) => {
-    if (!serverUserAuthenticated || location.protocol === 'file:') return classifyMerchant(merchant);
+    if (!supabaseUserAuthenticated || location.protocol === 'file:') return classifyMerchant(merchant);
     try {
-      const result = await apiRequest('auth/category-suggestion.php', { method: 'POST', body: JSON.stringify({ merchant }) });
+      const result = await supabaseRequest('category-suggestion', { method: 'POST', body: JSON.stringify({ merchant }) });
       return result.suggestion;
     } catch (error) {
       console.warn('Personalized category suggestion unavailable; using the local dictionary.', error.message);
@@ -351,7 +756,7 @@ document.addEventListener('DOMContentLoaded', () => {
     updateOnboardingGoalHints();
   };
   const fetchOnboardingData = async () => {
-    const result = await apiRequest('auth/onboarding.php');
+    const result = await supabaseRequest('onboarding');
     applyOnboardingProfile(result.profile, result.investment_plans || []);
     if (result.profile) {
       budgetLimit = Number(result.profile.monthly_budget) > 0 ? Number(result.profile.monthly_budget) : defaultBudgetLimit;
@@ -363,7 +768,7 @@ document.addEventListener('DOMContentLoaded', () => {
     return result;
   };
   const openFinancialProfile = async () => {
-    if (!activeUser || !serverUserAuthenticated) return;
+    if (!activeUser || !supabaseUserAuthenticated) return;
     try {
       shouldShowFinishSetupCard = false;
       finishSetupCard.hidden = true;
@@ -375,7 +780,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   };
   const showOnboardingIfNeeded = async () => {
-    if (!activeUser || !serverUserAuthenticated || location.protocol === 'file:') return;
+    if (!activeUser || !supabaseUserAuthenticated || location.protocol === 'file:') return;
     try {
       const result = await fetchOnboardingData();
       onboardingIsComplete = Boolean(result.profile?.onboarding_completed_at);
@@ -397,13 +802,13 @@ document.addEventListener('DOMContentLoaded', () => {
       onboardingModal.show();
     } catch (error) {
       console.error('Could not determine onboarding completion status.', error);
-      finishSetupDescription.textContent = 'Your financial profile could not be loaded. Check that database/onboarding_completed.sql has been imported, then try again.';
+      finishSetupDescription.textContent = 'Your financial profile could not be loaded. Check your Supabase migrations and try again.';
       shouldShowFinishSetupCard = true;
       finishSetupCard.hidden = Boolean(location.hash && location.hash !== '#dashboard');
     }
   };
-  const loadServerTransactions = async () => {
-    const result = await apiRequest('auth/transactions.php');
+  const loadSupabaseTransactions = async () => {
+    const result = await supabaseRequest('transactions');
     transactions = result.transactions;
     monthEndForecast = result.month_end_forecast;
     renderTransactions();
@@ -414,11 +819,11 @@ document.addEventListener('DOMContentLoaded', () => {
     const pendingTransactions = localStorage.getItem(storageKey) ? JSON.parse(localStorage.getItem(storageKey)) : localTransactionsBackup;
     if (!activeUser || location.protocol === 'file:' || !pendingTransactions.length || localStorage.getItem(`finora-sync-${activeUser.id}`)) return;
     for (const item of pendingTransactions) {
-      await apiRequest('auth/transactions.php', { method: 'POST', body: JSON.stringify({ type: item.type, merchant: item.merchant, category: item.category || 'Other', amount: item.amount, date: item.date, time: item.time || '', payment_method: item.payment_method || '', location: item.location || '', notes: item.notes || '', category_confidence: item.category_confidence || 0 }) });
+      await supabaseRequest('transactions', { method: 'POST', body: JSON.stringify({ type: item.type, merchant: item.merchant, category: item.category || 'Other', amount: item.amount, date: item.date, time: item.time || '', payment_method: item.payment_method || '', location: item.location || '', notes: item.notes || '', category_confidence: item.category_confidence || 0 }) });
     }
     localStorage.setItem(`finora-sync-${activeUser.id}`, 'complete');
     localStorage.removeItem(storageKey);
-    await loadServerTransactions();
+    await loadSupabaseTransactions();
   };
 
   const renderTransactions = () => {
@@ -845,8 +1250,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
     let savedSettings;
     let message = 'Saved successfully.';
-    if (serverUserAuthenticated && location.protocol !== 'file:') {
-      const result = await apiRequest('auth/settings.php', {
+    if (supabaseUserAuthenticated && location.protocol !== 'file:') {
+      const result = await supabaseRequest('settings', {
         method: 'POST',
         body: JSON.stringify({ action: 'preferences', currency, monthly_budget: monthlyBudget, category_limits: categoryLimits })
       });
@@ -865,9 +1270,9 @@ document.addEventListener('DOMContentLoaded', () => {
     budgetLimit = Number(savedSettings.monthly_budget);
     categoryBudgetAllocations = savedSettings.budget_allocations;
     syncBudgetSettingsFields();
-    if (serverUserAuthenticated && location.protocol !== 'file:') {
+    if (supabaseUserAuthenticated && location.protocol !== 'file:') {
       updateSummary();
-      await loadServerTransactions();
+      await loadSupabaseTransactions();
     } else {
       updateSummary();
     }
@@ -919,7 +1324,7 @@ document.addEventListener('DOMContentLoaded', () => {
     status.textContent = 'Loading settings...';
     status.classList.remove('error');
     try {
-      const result = await apiRequest('auth/settings.php');
+      const result = await supabaseRequest('settings');
       setProfile(result.user);
       applyCurrency(result.settings.currency || 'INR');
       budgetLimit = Number(result.settings.monthly_budget) > 0 ? Number(result.settings.monthly_budget) : defaultBudgetLimit;
@@ -942,7 +1347,7 @@ document.addEventListener('DOMContentLoaded', () => {
       document.getElementById('settingsWeeklySummary').checked = notifications.weeklySummary ?? false;
       settingsLoadedUserId = result.user.id;
       status.textContent = '';
-      await loadServerTransactions();
+      await loadSupabaseTransactions();
     } catch (error) {
       status.textContent = error.message || 'Could not load settings.';
       status.classList.add('error');
@@ -1147,7 +1552,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const { error } = await supabaseClient.auth.updateUser({ email: requestedEmail });
         if (error) throw error;
       }
-      const result = await apiRequest('auth/settings.php', {
+      const result = await supabaseRequest('settings', {
         method: 'POST',
         body: JSON.stringify({
           action: 'profile',
@@ -1185,7 +1590,7 @@ document.addEventListener('DOMContentLoaded', () => {
     event.preventDefault();
     showSettingsMessage('settingsFinancialProfileMessage', '');
     try {
-      const result = await apiRequest('auth/settings.php', {
+      const result = await supabaseRequest('settings', {
         method: 'POST',
         body: JSON.stringify({
           action: 'financial_profile',
@@ -1209,7 +1614,7 @@ document.addEventListener('DOMContentLoaded', () => {
     event.preventDefault();
     showSettingsMessage('settingsJarvisActionsMessage', '');
     try {
-      const result = await apiRequest('auth/settings.php', {
+      const result = await supabaseRequest('settings', {
         method: 'POST',
         body: JSON.stringify({
           action: 'jarvis_actions',
@@ -1260,7 +1665,7 @@ document.addEventListener('DOMContentLoaded', () => {
   });
 
   const demoGoalsStorageKey = 'finora-savings-goals';
-  const isDemoGoalsMode = () => location.protocol === 'file:' || !serverUserAuthenticated || !activeUser;
+  const isDemoGoalsMode = () => location.protocol === 'file:' || !supabaseUserAuthenticated || !activeUser;
   const goalsOwnerKey = () => isDemoGoalsMode() ? 'demo' : `user:${activeUser.id}`;
   const setGoalsMessage = (message, isError = false) => {
     const element = document.getElementById('goalsLoadMessage');
@@ -1435,7 +1840,7 @@ document.addEventListener('DOMContentLoaded', () => {
       if (isDemoGoalsMode()) {
         savingsGoals = JSON.parse(localStorage.getItem(demoGoalsStorageKey) || '[]');
       } else {
-        const result = await apiRequest('auth/goals.php');
+        const result = await supabaseRequest('goals');
         savingsGoals = result.goals;
       }
       goalsLoadedFor = ownerKey;
@@ -1478,7 +1883,7 @@ document.addEventListener('DOMContentLoaded', () => {
         savingsGoals.push({ id: `demo-${Date.now()}`, title, target_amount: targetAmount, current_amount: startingAmount, deadline, contributions: [] });
         saveDemoGoals();
       } else {
-        await apiRequest('auth/goals.php', { method: 'POST', body: JSON.stringify({ title, target_amount: targetAmount, deadline, starting_amount: startingAmount }) });
+        await supabaseRequest('goals', { method: 'POST', body: JSON.stringify({ title, target_amount: targetAmount, deadline, starting_amount: startingAmount }) });
       }
       form.reset();
       document.getElementById('goalStartingAmount').value = '0';
@@ -1509,7 +1914,7 @@ document.addEventListener('DOMContentLoaded', () => {
           savingsGoals = savingsGoals.filter((item) => String(item.id) !== goalId);
           saveDemoGoals();
         } else {
-          await apiRequest('auth/goals.php', { method: 'DELETE', body: JSON.stringify({ id: goalId, action: 'goal' }) });
+          await supabaseRequest('goals', { method: 'DELETE', body: JSON.stringify({ id: goalId, action: 'goal' }) });
         }
         await refreshSavingsGoals();
       } catch (error) {
@@ -1529,7 +1934,7 @@ document.addEventListener('DOMContentLoaded', () => {
           goal.contributions = goal.contributions.filter((item) => String(item.id) !== contributionId);
           saveDemoGoals();
         } else {
-          await apiRequest('auth/goals.php', { method: 'DELETE', body: JSON.stringify({ id: contributionId, action: 'contribution' }) });
+          await supabaseRequest('goals', { method: 'DELETE', body: JSON.stringify({ id: contributionId, action: 'contribution' }) });
         }
         await refreshSavingsGoals();
       } catch (error) {
@@ -1556,7 +1961,7 @@ document.addEventListener('DOMContentLoaded', () => {
           Object.assign(goal, updatedGoal);
           saveDemoGoals();
         } else {
-          await apiRequest('auth/goals.php', { method: 'PATCH', body: JSON.stringify({ id: goalId, ...updatedGoal }) });
+          await supabaseRequest('goals', { method: 'PATCH', body: JSON.stringify({ id: goalId, ...updatedGoal }) });
         }
       } else {
         const amount = Number(form.querySelector('input[type="number"]').value);
@@ -1566,7 +1971,7 @@ document.addEventListener('DOMContentLoaded', () => {
           goal.contributions.push({ id: `demo-${Date.now()}`, amount, contribution_date: date });
           saveDemoGoals();
         } else {
-          await apiRequest('auth/goals.php', { method: 'POST', body: JSON.stringify({ action: 'contribution', goal_id: goalId, amount, date }) });
+          await supabaseRequest('goals', { method: 'POST', body: JSON.stringify({ action: 'contribution', goal_id: goalId, amount, date }) });
         }
       }
       await refreshSavingsGoals();
@@ -1606,11 +2011,11 @@ document.addEventListener('DOMContentLoaded', () => {
     button.disabled = true;
     try {
       if (activeUser && location.protocol !== 'file:') {
-        await apiRequest('auth/transactions.php', {
+        await supabaseRequest('transactions', {
           method: 'DELETE',
           body: JSON.stringify({ id: transactionId })
         });
-        await loadServerTransactions();
+        await loadSupabaseTransactions();
       } else {
         localStorage.setItem(storageKey, JSON.stringify(transactions.filter((item) => String(item.id) !== transactionId)));
         transactions = transactions.filter((item) => String(item.id) !== transactionId);
@@ -1630,17 +2035,17 @@ document.addEventListener('DOMContentLoaded', () => {
   if (storedProfile) {
     setProfile(storedProfile);
   }
-  if (location.protocol !== 'file:' && supabaseClient) apiRequest('auth/session.php').then(async (result) => {
+  if (location.protocol !== 'file:' && supabaseClient) supabaseRequest('session').then(async (result) => {
     updateProAvailability(result.pro_enabled);
     if (result.requires_verification) {
       openEmailVerification(result.email, 'Please verify your email first.', true);
       return;
     }
     if (!result.user) return;
-    serverUserAuthenticated = true;
+    supabaseUserAuthenticated = true;
     setProfile(result.user);
     await syncLocalTransactions();
-    await loadServerTransactions();
+    await loadSupabaseTransactions();
     await showOnboardingIfNeeded();
     if (location.hash === '#goals') await refreshSavingsGoals();
   }).catch((error) => {
@@ -1792,7 +2197,7 @@ document.addEventListener('DOMContentLoaded', () => {
     if (!window.confirm('Skip setup for now? You can finish it later from the dashboard.')) return;
     onboardingModal.hide();
     if (activeUser?.id) sessionStorage.removeItem(finishSetupDismissedKey(activeUser.id));
-    shouldShowFinishSetupCard = !onboardingIsComplete && Boolean(activeUser && serverUserAuthenticated);
+    shouldShowFinishSetupCard = !onboardingIsComplete && Boolean(activeUser && supabaseUserAuthenticated);
     finishSetupCard.hidden = !shouldShowFinishSetupCard || Boolean(location.hash && location.hash !== '#dashboard');
   });
   document.getElementById('finishSetupButton').addEventListener('click', openFinancialProfile);
@@ -1830,7 +2235,7 @@ document.addEventListener('DOMContentLoaded', () => {
       spending_style: document.querySelector('input[name="setupStyle"]:checked').value
     };
     try {
-      await apiRequest('auth/onboarding.php', { method: 'POST', body: JSON.stringify(payload) });
+      await supabaseRequest('onboarding', { method: 'POST', body: JSON.stringify(payload) });
       applyCurrency(payload.currency);
       categoryBudgetAllocations = allocations;
       if (payload.full_name) setProfile({ ...activeUser, name: payload.full_name });
@@ -1841,14 +2246,14 @@ document.addEventListener('DOMContentLoaded', () => {
         localStorage.removeItem(onboardingPromptedKey(activeUser.id));
         sessionStorage.removeItem(finishSetupDismissedKey(activeUser.id));
       }
-      await loadServerTransactions();
+      await loadSupabaseTransactions();
       onboardingModal.hide();
       document.getElementById('liveToast').querySelector('.toast-body').innerHTML = '<i class="fa-solid fa-circle-check me-2"></i>Your financial blueprint is ready.';
       bootstrap.Toast.getOrCreateInstance(document.getElementById('liveToast')).show();
     } catch (error) { alert(error.message); }
   });
   document.getElementById('refreshPrediction').addEventListener('click', async () => {
-    if (activeUser && location.protocol !== 'file:') await loadServerTransactions();
+    if (activeUser && location.protocol !== 'file:') await loadSupabaseTransactions();
     else updateSummary();
     bootstrap.Toast.getOrCreateInstance(document.getElementById('liveToast')).show();
   });
@@ -1964,15 +2369,15 @@ document.addEventListener('DOMContentLoaded', () => {
       if (!supabaseClient) throw new Error('Supabase is not configured. Please contact the site administrator.');
       const { data, error } = await supabaseClient.auth.verifyOtp({ email, token: otp, type: 'signup' });
       if (error) throw error;
-      const result = await apiRequest('auth/session.php');
+      const result = await supabaseRequest('session');
       if (!result.user || !data.user) throw new Error('Email confirmation succeeded, but your Finora profile could not be loaded.');
-      serverUserAuthenticated = true;
+      supabaseUserAuthenticated = true;
       setProfile(result.user);
       localStorage.setItem('finora-profile', JSON.stringify(result.user));
       verificationModal.hide();
       sessionStorage.removeItem(finishSetupDismissedKey(result.user.id));
       await syncLocalTransactions();
-      await loadServerTransactions();
+      await loadSupabaseTransactions();
       await showOnboardingIfNeeded();
       if (location.hash === '#goals') await refreshSavingsGoals();
     } catch (error) {
@@ -2019,9 +2424,6 @@ document.addEventListener('DOMContentLoaded', () => {
     text.textContent = suggestion.uncertain
       ? 'Pakka nahi hun — Other. Please choose a category.'
       : `Suggested category: ${suggestion.category}${suggestion.source === 'personal' ? ' · your saved preference' : ''}`;
-    if (suggestion.learning_available === false) {
-      text.textContent += ' · Import database/user_category_rules.sql to enable personal learning.';
-    }
     message.replaceChildren(icon, text);
   };
 
@@ -2041,10 +2443,10 @@ document.addEventListener('DOMContentLoaded', () => {
     let savedCategoryLearning = null;
     if (activeUser && location.protocol !== 'file:') {
       try {
-        const result = await apiRequest('auth/transactions.php', { method: 'POST', body: JSON.stringify(transaction) });
+        const result = await supabaseRequest('transactions', { method: 'POST', body: JSON.stringify(transaction) });
         transactions.push(result.transaction);
         savedCategoryLearning = result.category_learning;
-        await loadServerTransactions();
+        await loadSupabaseTransactions();
       } catch (error) { alert(error.message); return; }
     } else {
       transactions.push(transaction);
@@ -2059,9 +2461,7 @@ document.addEventListener('DOMContentLoaded', () => {
     transactionTimeInput.value = nextTransactionDefaults.time;
     autoFilledTransactionTime = nextTransactionDefaults.time;
     document.getElementById('categoryHint').textContent = 'AI ready';
-    if (savedCategoryLearning?.reason === 'migration_required') {
-      document.getElementById('liveToast').querySelector('.toast-body').textContent = 'Transaction saved. Personalized categories need database/user_category_rules.sql imported.';
-    } else if (savedCategoryLearning?.reason === 'limit_reached') {
+    if (savedCategoryLearning?.reason === 'limit_reached') {
       document.getElementById('liveToast').querySelector('.toast-body').textContent = 'Transaction saved. The 500 saved-category rule limit was reached.';
     } else if (savedCategoryLearning?.reason === 'save_failed') {
       document.getElementById('liveToast').querySelector('.toast-body').textContent = 'Transaction saved, but the category preference could not be saved. Please try again.';
@@ -2119,7 +2519,7 @@ document.addEventListener('DOMContentLoaded', () => {
         options: { data: { name } }
       });
       if (error) throw error;
-      serverUserAuthenticated = false;
+      supabaseUserAuthenticated = false;
       bootstrap.Modal.getInstance(document.getElementById('accountModal')).hide();
       document.getElementById('accountForm').reset();
       openEmailVerification(email, data.session
@@ -2266,16 +2666,16 @@ document.addEventListener('DOMContentLoaded', () => {
         openEmailVerification(data.user?.email || document.getElementById('loginEmail').value.trim(), 'Please verify your email before signing in.');
         return;
       }
-      const result = await apiRequest('auth/session.php');
+      const result = await supabaseRequest('session');
       if (!result.user) throw new Error('Your Supabase account is not linked to a Finora profile. Contact support to complete account migration.');
-      serverUserAuthenticated = true;
+      supabaseUserAuthenticated = true;
       loginError.classList.add('d-none');
       loginError.textContent = '';
       forgotPasswordLink.classList.add('d-none');
       setProfile(result.user);
       sessionStorage.removeItem(finishSetupDismissedKey(result.user.id));
       await syncLocalTransactions();
-      await loadServerTransactions();
+      await loadSupabaseTransactions();
       if (location.hash === '#goals') await refreshSavingsGoals();
       bootstrap.Modal.getInstance(document.getElementById('loginModal')).hide();
       await showOnboardingIfNeeded();
@@ -2431,14 +2831,12 @@ document.addEventListener('DOMContentLoaded', () => {
     confirmButton.addEventListener('click', async () => {
       setBusy(true);
       try {
-        const result = await apiRequest('auth/jarvis-action.php', {
+        const result = await supabaseRequest('jarvis-action', {
           method: 'POST',
           body: JSON.stringify({ mode: 'confirm', proposal_token: proposalToken })
         });
         status.textContent = result.message;
-        if (result.category_learning?.reason === 'migration_required') {
-          status.textContent += ' Personalized categories need database/user_category_rules.sql imported.';
-        } else if (result.category_learning?.reason === 'limit_reached') {
+        if (result.category_learning?.reason === 'limit_reached') {
           status.textContent += ' The 500 saved-category rule limit was reached.';
         } else if (result.category_learning?.reason === 'save_failed') {
           status.textContent += ' The category preference could not be saved; the transaction action succeeded.';
@@ -2449,7 +2847,7 @@ document.addEventListener('DOMContentLoaded', () => {
         editForm.remove();
         if (result.undo_token) renderJarvisUndo(result.undo_token, result.message, card, status);
         try {
-          if (['add_expense', 'add_income', 'edit_transaction'].includes(result.action_type)) await loadServerTransactions();
+          if (['add_expense', 'add_income', 'edit_transaction'].includes(result.action_type)) await loadSupabaseTransactions();
           if (result.action_type === 'add_goal_contribution') await refreshSavingsGoals();
           if (result.action_type === 'set_budget') await loadSettingsData();
         } catch (refreshError) {
@@ -2470,7 +2868,7 @@ document.addEventListener('DOMContentLoaded', () => {
       reviseButton.disabled = true;
       try {
         const values = Object.fromEntries(Object.entries(fields).map(([key, input]) => [key, key === 'amount' ? Number(input.value) : input.value]));
-        const result = await apiRequest('auth/jarvis-action.php', {
+        const result = await supabaseRequest('jarvis-action', {
           method: 'POST',
           body: JSON.stringify({ mode: 'revise', proposal_token: proposalToken, fields: values })
         });
@@ -2484,7 +2882,7 @@ document.addEventListener('DOMContentLoaded', () => {
     cancelButton.addEventListener('click', async () => {
       setBusy(true);
       try {
-        await apiRequest('auth/jarvis-action.php', {
+        await supabaseRequest('jarvis-action', {
           method: 'POST',
           body: JSON.stringify({ mode: 'cancel', proposal_token: proposalToken })
         });
@@ -2516,7 +2914,7 @@ document.addEventListener('DOMContentLoaded', () => {
     undoButton.addEventListener('click', async () => {
       undoButton.disabled = true;
       try {
-        const result = await apiRequest('auth/jarvis-action.php', {
+        const result = await supabaseRequest('jarvis-action', {
           method: 'POST',
           body: JSON.stringify({ mode: 'undo', undo_token: undoToken })
         });
@@ -2524,7 +2922,7 @@ document.addEventListener('DOMContentLoaded', () => {
         messageStatus.textContent = result.message;
         undoButton.remove();
         try {
-          await loadServerTransactions();
+          await loadSupabaseTransactions();
         } catch (refreshError) {
           messageStatus.textContent = `${result.message} Reload the page if the updated view does not appear.`;
         }
@@ -2559,24 +2957,24 @@ document.addEventListener('DOMContentLoaded', () => {
     submitButton.disabled = true;
 
     try {
-      if (!serverUserAuthenticated || !activeUser?.id) {
+      if (!supabaseUserAuthenticated || !activeUser?.id) {
         addJarvisMessage('Sign in to get answers based on your financial data.', 'bot');
         return;
       }
       if (jarvisLooksLikeAction(question)) {
-        const result = await apiRequest('auth/jarvis-action.php', {
+        const result = await supabaseRequest('jarvis-action', {
           method: 'POST',
           body: JSON.stringify({ mode: 'preview', command: question })
         });
         if (result.auto_added) {
           renderJarvisUndo(result.undo_token, result.message);
-          await loadServerTransactions();
+          await loadSupabaseTransactions();
         } else {
           renderJarvisActionCard(result.proposal, result.proposal_token);
         }
         return;
       }
-      const result = await apiRequest('auth/jarvis.php', {
+      const result = await supabaseRequest('jarvis', {
         method: 'POST',
         body: JSON.stringify({ question, period: selectedDateRange })
       });

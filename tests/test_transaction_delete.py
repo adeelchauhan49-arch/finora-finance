@@ -3,13 +3,15 @@ from pathlib import Path
 
 
 class TransactionDeleteTests(unittest.TestCase):
-    def test_delete_route_is_authenticated_and_scoped_to_owner(self):
+    def test_supabase_delete_is_scoped_to_authenticated_owner(self):
         root = Path(__file__).resolve().parents[1]
-        endpoint = root.joinpath('auth', 'transactions.php').read_text(encoding='utf-8')
-        self.assertIn("$_SERVER['REQUEST_METHOD'] === 'DELETE'", endpoint)
-        self.assertIn('DELETE FROM transactions WHERE id = :id AND user_id = :user_id', endpoint)
-        self.assertIn("'user_id' => $user['id']", endpoint)
-        self.assertIn('FILTER_VALIDATE_INT', endpoint)
+        app_js = root.joinpath('assets', 'js', 'app.js').read_text(encoding='utf-8')
+        migration = root.joinpath('supabase', 'migrations', '20261016000000_browser_access.sql').read_text(encoding='utf-8')
+        delete = app_js.split("if (method === 'DELETE')", 1)[1].split("if (resource === 'onboarding')", 1)[0]
+        self.assertIn(".from('transactions').delete()", delete)
+        self.assertIn(".eq('id', body.id).eq('user_id', user.id)", delete)
+        self.assertIn("create policy %I on public.%I for all to authenticated", migration)
+        self.assertIn('user_id = public.finora_user_id()', migration)
 
     def test_delete_control_confirms_and_refreshes_derived_views(self):
         root = Path(__file__).resolve().parents[1]

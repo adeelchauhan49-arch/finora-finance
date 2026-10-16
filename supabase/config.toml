@@ -26,3 +26,18 @@ enable_signup = true
 enable_signup = true
 double_confirm_changes = true
 enable_confirmations = true
+
+[functions.jarvis]
+verify_jwt = true
+
+[functions.jarvis-action]
+verify_jwt = true
+
+[functions.pro-status]
+verify_jwt = true
+
+[functions.pro-create-order]
+verify_jwt = true
+
+[functions.pro-verify-payment]
+verify_jwt = true

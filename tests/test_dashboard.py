@@ -76,41 +76,33 @@ class DashboardTests(unittest.TestCase):
         self.assertIn("document.getElementById('transactionList').addEventListener('click', async (event)", self.app_js)
         self.assertIn('button.dataset.transactionId', self.app_js)
         self.assertIn('window.confirm(`Are you sure you want to delete', self.app_js)
-        self.assertIn('Added via confirmed Jarvis action', self.root.joinpath('auth', 'jarvis-action.php').read_text(encoding='utf-8'))
+        self.assertIn('Added via confirmed Jarvis action', self.root.joinpath('supabase', 'migrations', '20261016000000_browser_access.sql').read_text(encoding='utf-8'))
         self.assertIn('details.textContent = `${item.category}', self.app_js)
         self.assertIn("row.className = 'transaction-row timeline-transaction'", self.app_js)
         self.assertIn("deleteButton.dataset.transactionId = String(item.id)", self.app_js)
         delete_handler = self.app_js.split("document.getElementById('transactionList').addEventListener", 1)[1].split('\n  renderTransactions();', 1)[0]
-        self.assertIn('await loadServerTransactions();', delete_handler)
+        self.assertIn('await loadSupabaseTransactions();', delete_handler)
 
-    def test_forecast_uses_server_values_for_card_and_shared_budget_insight(self):
-        endpoint = self.root.joinpath('auth', 'transactions.php').read_text(encoding='utf-8')
-        snapshot = self.root.joinpath('includes', 'jarvis_financial_snapshot.php').read_text(encoding='utf-8')
-        self.assertIn('jarvis_build_month_end_forecast(db(), (int) $user[\'id\'])', endpoint)
+    def test_forecast_uses_supabase_transaction_values_for_card_and_shared_budget_insight(self):
         self.assertIn('monthEndForecast = result.month_end_forecast', self.app_js)
+        self.assertIn('const forecastMonthEnd = (items, profile) =>', self.app_js)
         self.assertIn('money(monthEndForecast.low)', self.app_js)
         self.assertIn('money(monthEndForecast.high)', self.app_js)
         self.assertIn('monthEndForecast.budget_comparison_text', self.app_js)
         self.assertNotIn('(spending / todayDate.getDate())', self.app_js)
         self.assertNotIn('projectedSpending', self.app_js)
         self.assertIn('Current month-end spending forecast', self.html)
-        self.assertIn('jarvis_build_month_end_forecast($connection, $userId, $today)', snapshot)
-        self.assertIn("$forecast['budget_comparison_text']", snapshot)
+        self.assertIn('monthly_budget: monthlyBudget', self.app_js)
+        self.assertIn('expense_transaction_count: currentExpenses.length', self.app_js)
 
     def test_personalized_category_endpoint_and_manual_corrections_are_wired(self):
-        suggestion_endpoint = self.root.joinpath('auth', 'category-suggestion.php').read_text(encoding='utf-8')
-        transaction_endpoint = self.root.joinpath('auth', 'transactions.php').read_text(encoding='utf-8')
-        classifier = self.root.joinpath('includes', 'category_classifier.php').read_text(encoding='utf-8')
-        migration_path = self.root.joinpath('database', 'user_category_rules.sql')
-        self.assertTrue(migration_path.is_file())
-        self.assertIn('category_classifier_for_user(db(), (int) $user[\'id\'], $merchant)', suggestion_endpoint)
-        self.assertIn("$data['category_explicit']", transaction_endpoint)
-        self.assertIn('category_classifier_save_user_rule($connection', transaction_endpoint)
-        self.assertIn('auth/category-suggestion.php', self.app_js)
+        migration = self.root.joinpath('supabase', 'migrations', '20261014000000_finora_supabase.sql').read_text(encoding='utf-8')
+        self.assertIn("supabaseRequest('category-suggestion'", self.app_js)
+        self.assertIn("from('user_category_rules')", self.app_js)
+        self.assertIn("body.category_explicit === true", self.app_js)
+        self.assertIn('unique(user_id, merchant_normalized)', migration)
         self.assertIn('Pakka nahi hun', self.app_js)
-        self.assertIn('category_classifier_find_user_rule', classifier)
-        self.assertNotIn('JARVIS_API_KEY', suggestion_endpoint)
-        self.assertIn('database/user_category_rules.sql', suggestion_endpoint)
+        self.assertNotIn('JARVIS_API_KEY', self.app_js)
 
 
 if __name__ == '__main__':
