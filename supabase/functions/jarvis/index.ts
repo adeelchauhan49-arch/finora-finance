@@ -41,6 +41,19 @@ Deno.serve(async (request) => {
     if (!question || question.length > 1000 || !["this-month", "last-month", "three-months"].includes(period)) {
       return json({ ok: false, message: "Send a valid question and date range to Jarvis." }, 422);
     }
+    const history = Array.isArray(input.history)
+      ? input.history
+        .filter((turn: { role?: unknown; text?: unknown } | null) =>
+          turn !== null
+          && (turn.role === "user" || turn.role === "model")
+          && typeof turn.text === "string"
+          && turn.text.trim() !== "")
+        .slice(-12)
+        .map((turn: { role: "user" | "model"; text: string }) => ({
+          role: turn.role,
+          parts: [{ text: turn.text.trim().slice(0, 1200) }],
+        }))
+      : [];
 
     const { data: limit, error: limitError } = await supabase.rpc("finora_consume_rate_limit", { p_for_action: false });
     if (limitError) throw new Error("Jarvis rate limiting is not available. Apply the latest Supabase migration.");
@@ -94,18 +107,15 @@ Deno.serve(async (request) => {
       net_total: Number((totals.income - totals.expenses).toFixed(2)),
       expense_transaction_count: totals.expenseCount,
       expense_by_category: Object.fromEntries(Object.entries(totals.categories).map(([category, amount]) => [category, Number(amount.toFixed(2))])),
-      monthly_budget: Number(financialProfile?.monthly_budget || 2400),
+      monthly_budget: Number(financialProfile?.monthly_budget || 0),
       currency: financialProfile?.currency || "INR",
       data_is_limited: (transactions || []).length < 3,
     };
 
-    if (snapshot.data_is_limited) {
-      return json({ ok: true, reply: "Mere paas ye data nahi hai. Add a few transactions for this period and ask me again.", snapshot });
-    }
-
     const apiKey = Deno.env.get("JARVIS_API_KEY");
     if (!apiKey) return json({ ok: false, message: "Jarvis AI is not configured. Set the JARVIS_API_KEY Edge Function secret." }, 503);
-    const model = (Deno.env.get("JARVIS_MODEL") || "gemini-2.0-flash").replace(/:generateContent$/, "");
+    const configuredModel = (Deno.env.get("JARVIS_MODEL") || "gemini-2.5-flash").replace(/:generateContent$/, "");
+    const model = /^gemini-[a-z0-9.-]+$/i.test(configuredModel) ? configuredModel : "gemini-2.5-flash";
     const response = await fetch(
       `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent?key=${encodeURIComponent(apiKey)}`,
       {
@@ -114,10 +124,13 @@ Deno.serve(async (request) => {
         body: JSON.stringify({
           systemInstruction: {
             parts: [{
-              text: "You are Jarvis, a concise personal finance assistant. Reply in the same language as the user's question (English or Hinglish). Use only the supplied financial snapshot and the question. Do not invent transaction details or claim access to individual transactions. Only use supplied numeric values or arithmetic directly derived from them. If the snapshot is insufficient, say 'Mere paas ye data nahi hai.' Never request passwords, OTPs, or payment details.",
+              text: `You are Jarvis, a concise personal finance assistant. Reply in the same language as the user's question (English or Hinglish). Use the conversation history only to understand references and maintain continuity; the current financial snapshot is the source of truth for financial facts. Do not invent transaction details or claim access to individual transactions. Only use numeric values present in the current snapshot or arithmetic directly derived from them. A monthly_budget value of 0 means no budget has been set; do not describe it as a real budget. ${snapshot.data_is_limited ? "The current snapshot has fewer than three transactions; explain that financial data is limited and do not make confident financial claims." : ""} Never request passwords, OTPs, or payment details.`,
             }],
           },
-          contents: [{ role: "user", parts: [{ text: JSON.stringify({ question, financial_snapshot: snapshot }) }] }],
+          contents: [
+            ...history,
+            { role: "user", parts: [{ text: JSON.stringify({ question, financial_snapshot: snapshot }) }] },
+          ],
           generationConfig: { maxOutputTokens: 350, temperature: 0.2 },
         }),
       },

@@ -24,6 +24,7 @@ class DashboardTests(unittest.TestCase):
         self.root = Path(__file__).resolve().parents[1]
         self.html = self.root.joinpath('index.html').read_text(encoding='utf-8')
         self.app_js = self.root.joinpath('assets', 'js', 'app.js').read_text(encoding='utf-8')
+        self.landing = self.root.joinpath('landing.html').read_text(encoding='utf-8')
 
     def test_sidebar_links_point_to_existing_sections(self):
         parser = DashboardNavigationParser()
@@ -42,6 +43,26 @@ class DashboardTests(unittest.TestCase):
         self.assertIn('No transactions this period.', self.app_js)
         self.assertNotIn('12840.5', self.app_js)
         self.assertNotIn('Tuesday, September 16, 2026', self.html)
+        self.assertIn('let transactions = parsedStoredTransactions.filter', self.app_js)
+        self.assertNotIn('seededTransactions', self.app_js)
+
+    def test_website_does_not_show_fabricated_financial_examples(self):
+        for sample in ('Alex Kim', 'Harvest Kitchen', 'Acme Inc.', 'Metro Transit', 'Northstar Market',
+                       'Rs 12,840', 'Rs 5,240', 'Rs 2,185', '12.8%', '8.2%', '4.6%', '58.3%'):
+            self.assertNotIn(sample, self.html)
+        for sample in ('Rs 37,677.82', 'Rs 21,600 of Rs 30,000', 'Rs 30,500', 'Rs 34,271', 'Sample data', 'Sample conversation'):
+            self.assertNotIn(sample, self.landing)
+        self.assertNotIn('Try the demo', self.landing)
+        self.assertNotIn('class="meter"', self.landing)
+        self.assertIn('No transactions yet.', self.html)
+        self.assertIn('Not enough data', self.html)
+        self.assertIn('Set a monthly budget to track progress', self.html)
+
+    def test_new_database_profiles_do_not_receive_a_sample_budget(self):
+        migration = self.root.joinpath('supabase', 'migrations', '20261016010000_remove_sample_budget_default.sql').read_text(encoding='utf-8')
+        self.assertIn('alter column monthly_budget drop default', migration)
+        self.assertIn('alter column monthly_budget drop not null', migration)
+        self.assertNotIn('update public.financial_profile', migration)
 
     def test_transaction_text_is_escaped_before_rendering(self):
         render = self.app_js.split('const renderTransactions = () => {', 1)[1].split('\n  const categoryLimitFor', 1)[0]

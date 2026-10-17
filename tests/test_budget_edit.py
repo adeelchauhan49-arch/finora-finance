@@ -32,7 +32,7 @@ class BudgetEditTests(unittest.TestCase):
         renderer = self.client.split('const renderEditBudgetCategories = () => {', 1)[1].split('const updateBudgetAllocationSummary', 1)[0]
         self.assertIn('spent.textContent = `Spent: ${money(spending[category] || 0)}`;', renderer)
         self.assertNotIn('innerHTML', renderer)
-        self.assertIn('textContent = `Category limits ka total ${money(total)} hai, monthly budget ${money(monthlyBudget)} hai`', self.client)
+        self.assertIn('Category limits ka total ${money(total)} hai, monthly budget ${money(monthlyBudget)} hai', self.client)
         self.assertIn('Category limits ka total monthly budget se zyada hai.', self.client)
 
     def test_budget_saves_through_owner_scoped_preferences_and_validates_positive_amounts(self):
@@ -47,14 +47,17 @@ class BudgetEditTests(unittest.TestCase):
         self.assertIn('limit < 0.01', self.client)
         self.assertIn('budget_allocations: allocations', self.client)
 
-    def test_default_reset_scales_existing_default_percentages_to_budget(self):
-        self.assertIn('const defaultBudgetLimit = 2400;', self.client)
-        self.assertIn('monthlyBudget * defaultAmount / defaultBudgetLimit', self.client)
+    def test_unset_budget_and_category_limits_stay_blank_until_user_sets_them(self):
+        self.assertIn('let budgetLimit = null;', self.client)
+        self.assertNotIn('defaultBudgetLimit', self.client)
+        self.assertNotIn('defaultCategoryBudgetAmounts', self.client)
+        self.assertIn("input.value = limit === null ? '' : limit.toFixed(2);", self.client)
+        self.assertIn("input.value = '';", self.client)
         self.assertIn('categoryBudgetAllocationKeys', self.client)
 
     def test_settings_modal_forecast_and_jarvis_share_saved_budget_state(self):
         self.assertIn('const syncBudgetSettingsFields = () =>', self.client)
-        self.assertIn('document.getElementById(\'settingsMonthlyBudget\').value = budgetLimit.toFixed(2)', self.client)
+        self.assertIn('monthlyInput.value = Number.isFinite(budgetLimit) ? budgetLimit.toFixed(2) : \'\'', self.client)
         self.assertIn('renderSettingsCategoryLimits();', self.client)
         self.assertIn('await loadSupabaseTransactions();', self.client)
         self.assertIn('monthEndForecast = result.month_end_forecast', self.client)

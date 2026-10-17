@@ -27,7 +27,7 @@ class ProfileDropdownTests(unittest.TestCase):
         self.assertIn("event.key === 'Escape'", self.app_js)
 
     def test_profile_name_is_rendered_as_text_in_dashboard_greeting(self):
-        self.assertIn('greeting.replaceChildren(document.createTextNode(`Good morning, ${user.name.split(\' \')[0]} `), wave);', self.app_js)
+        self.assertIn('greeting.replaceChildren(document.createTextNode(`Welcome, ${user.name.split(\' \')[0]} `), wave);', self.app_js)
 
     def test_profile_name_is_never_interpreted_as_html(self):
         self.assertIn("document.getElementById('profileDropdownName').textContent = user.name;", self.app_js)

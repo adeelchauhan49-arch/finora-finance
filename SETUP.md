@@ -21,14 +21,16 @@ supabase functions deploy pro-create-order
 supabase functions deploy pro-verify-payment
 ```
 
-Configure secrets in the Supabase project, not in this frontend directory:
+Jarvis uses Google's Gemini `generateContent` API. Configure secrets in Supabase, not in this frontend directory or a local `.env`:
 
-- `JARVIS_API_KEY` and optionally `JARVIS_MODEL` for Jarvis responses.
+- `JARVIS_API_KEY` with a rotated Google AI Studio API key, and `JARVIS_MODEL=gemini-2.5-flash` (or another supported Gemini model).
 - `FINORA_PRO_ENABLED=true` to enable Pro. It is disabled unless explicitly enabled.
 - `RAZORPAY_KEY_ID` and `RAZORPAY_KEY_SECRET` for Pro payments.
 - `FINORA_PRO_PROMO_CODE` optionally enables one-time Pro promotion-code redemption.
 
-The Edge Functions use the Supabase service-role key only inside the hosted function runtime; it must never be put in frontend code, checked into source control, or sent to a browser. Configure and deploy secrets after rotating any credentials that were previously stored in `.env`.
+The Jarvis chat keeps the current user's recent turns in per-tab `sessionStorage` and sends a bounded history with each request. It is cleared when the user signs out. Gemini uses it for conversation continuity while the live Supabase snapshot remains authoritative for financial facts. Account changes requested through Jarvis are validated and shown as a preview; they are written to Supabase only after confirmation (unless the user explicitly enabled the existing auto-add setting).
+
+Set secrets through Supabase Dashboard → Edge Functions → Secrets or the Supabase CLI. Do not upload a complete `.env` file: it may contain unrelated credentials. The Edge Functions use the Supabase service-role key only inside the hosted function runtime; it must never be put in frontend code, checked into source control, or sent to a browser. Rotate any credentials that were previously stored in `.env` before setting the corresponding Supabase secrets.
 
 ## Tests
 

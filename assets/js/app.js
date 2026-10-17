@@ -21,21 +21,13 @@ document.addEventListener('DOMContentLoaded', () => {
   let reportUsesCustomRange = Boolean(storedReportCustomRange?.start && storedReportCustomRange?.end);
   const currencySymbols = { INR: 'Rs', USD: '$', EUR: '€' };
   const currencyConfig = { code: 'INR', symbol: currencySymbols.INR };
-  const defaultBudgetLimit = 2400;
-  const defaultCategoryBudgetAmounts = { Housing: 1200, Dining: 400, 'Food & dining': 400, Shopping: 300, Transport: 300, Health: 200, Utilities: 250, Entertainment: 200, Other: 200 };
   const categoryBudgetAllocationKeys = { 'Food & dining': 'Food', Housing: 'Rent', Transport: 'Travel', Utilities: 'Bills', Other: 'Others' };
   const demoBudgetStorageKey = 'finora-budget-preferences';
-  let budgetLimit = defaultBudgetLimit;
+  let budgetLimit = null;
   let categoryBudgetAllocations = {};
   let cashflowChart;
   let reportsCategoryChart;
   let reportsTrendChart;
-  const seededTransactions = [
-    { id: 1, merchant: 'Harvest Kitchen', category: 'Food & dining', amount: 42.8, type: 'expense', date: '2026-09-16' },
-    { id: 2, merchant: 'Acme Inc.', category: 'Salary', amount: 4850, type: 'income', date: '2026-09-15' },
-    { id: 3, merchant: 'Metro Transit', category: 'Transport', amount: 36, type: 'expense', date: '2026-09-14' },
-    { id: 4, merchant: 'Northstar Market', category: 'Shopping', amount: 128.46, type: 'expense', date: '2026-09-13' }
-  ];
   const sidebar = document.getElementById('sidebar');
   const menuToggle = document.getElementById('menuToggle');
   const themeToggle = document.getElementById('themeToggle');
@@ -83,8 +75,13 @@ document.addEventListener('DOMContentLoaded', () => {
     return { start: formatLocalDate(start), end: formatLocalDate(end), monthCount, label };
   };
   const storedTransactions = localStorage.getItem(storageKey);
-  const localTransactionsBackup = storedTransactions ? JSON.parse(storedTransactions) : [];
-  let transactions = storedTransactions ? JSON.parse(storedTransactions) : seededTransactions;
+  const legacySampleIds = new Set([1, 2, 3, 4]);
+  const parsedStoredTransactions = storedTransactions ? JSON.parse(storedTransactions) : [];
+  let transactions = parsedStoredTransactions.filter((item) => !legacySampleIds.has(Number(item.id)));
+  if (transactions.length !== parsedStoredTransactions.length) {
+    localStorage.setItem(storageKey, JSON.stringify(transactions));
+  }
+  const localTransactionsBackup = transactions.slice();
   let monthEndForecast = null;
   let activeUser = null;
   let supabaseUserAuthenticated = false;
@@ -94,9 +91,6 @@ document.addEventListener('DOMContentLoaded', () => {
   };
   let savingsGoals = [];
   let goalsLoadedFor = null;
-  const storedProfile = location.protocol === 'file:'
-    ? JSON.parse(localStorage.getItem('finora-profile') || 'null')
-    : null;
   try {
     const storedDemoBudget = JSON.parse(localStorage.getItem(demoBudgetStorageKey) || 'null');
     if (storedDemoBudget && Number(storedDemoBudget.monthly_budget) >= 1 && storedDemoBudget.budget_allocations && typeof storedDemoBudget.budget_allocations === 'object') {
@@ -261,7 +255,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const remainingDays = daysInMonth - dayCount;
     const point = currentSpending + average * remainingDays;
     const uncertainty = Math.sqrt(variance) * Math.sqrt(remainingDays);
-    const monthlyBudget = Number(profile?.monthly_budget) || defaultBudgetLimit;
+    const monthlyBudget = Number(profile?.monthly_budget) || null;
     const currency = profile?.currency || 'INR';
     const symbol = currencySymbols[currency] || currency;
     const difference = Math.abs(point - monthlyBudget);
@@ -276,9 +270,11 @@ document.addEventListener('DOMContentLoaded', () => {
       days_elapsed: dayCount,
       expense_transaction_count: currentExpenses.length,
       confidence: dayCount >= 27 && currentExpenses.length >= 40 ? 'High' : dayCount >= 21 && currentExpenses.length >= 20 ? 'Medium' : 'Low',
-      budget_comparison_text: point > monthlyBudget
-        ? `At this pace, spending is projected to be ${symbol} ${difference.toFixed(2)} over the monthly budget of ${symbol} ${monthlyBudget.toFixed(2)}.`
-        : `At this pace, about ${symbol} ${difference.toFixed(2)} of the monthly budget of ${symbol} ${monthlyBudget.toFixed(2)} may remain.`
+      budget_comparison_text: monthlyBudget
+        ? point > monthlyBudget
+          ? `At this pace, spending is projected to be ${symbol} ${difference.toFixed(2)} over the monthly budget of ${symbol} ${monthlyBudget.toFixed(2)}.`
+          : `At this pace, about ${symbol} ${difference.toFixed(2)} of the monthly budget of ${symbol} ${monthlyBudget.toFixed(2)} may remain.`
+        : 'Set a monthly budget to compare this forecast with your plan.'
     };
   };
   const invokeSupabaseFunction = async (name, body) => {
@@ -468,7 +464,7 @@ document.addEventListener('DOMContentLoaded', () => {
           user: unwrapSupabase(userRecord),
           settings: {
             currency: settings.currency || 'INR',
-            monthly_budget: Number(settings.monthly_budget || defaultBudgetLimit),
+            monthly_budget: Number(settings.monthly_budget || 0),
             budget_allocations: settings.budget_allocations || {},
             jarvis_auto_add_enabled: settings.jarvis_auto_add_enabled === true,
             jarvis_auto_add_limit: Number(settings.jarvis_auto_add_limit || 5000),
@@ -643,7 +639,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const wave = document.createElement('span');
     wave.className = 'wave';
     wave.textContent = '✦';
-    greeting.replaceChildren(document.createTextNode(`Good morning, ${user.name.split(' ')[0]} `), wave);
+    greeting.replaceChildren(document.createTextNode(`Welcome, ${user.name.split(' ')[0]} `), wave);
     document.getElementById('sidebarUserName').textContent = user.name;
     document.querySelector('.signin-btn').textContent = 'Sign out';
     document.querySelector('.signin-btn').removeAttribute('data-bs-toggle');
@@ -759,7 +755,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const result = await supabaseRequest('onboarding');
     applyOnboardingProfile(result.profile, result.investment_plans || []);
     if (result.profile) {
-      budgetLimit = Number(result.profile.monthly_budget) > 0 ? Number(result.profile.monthly_budget) : defaultBudgetLimit;
+      budgetLimit = Number(result.profile.monthly_budget) > 0 ? Number(result.profile.monthly_budget) : null;
       categoryBudgetAllocations = result.profile.budget_allocations && typeof result.profile.budget_allocations === 'object'
         ? result.profile.budget_allocations
         : {};
@@ -914,14 +910,14 @@ document.addEventListener('DOMContentLoaded', () => {
   });
 
   const categoryLimitFor = (category, monthCount) => {
+    if (!Number.isFinite(budgetLimit) || budgetLimit <= 0) return null;
     const legacyKey = categoryBudgetAllocationKeys[category];
     const allocationKey = [category, legacyKey].find((key) => key && Object.prototype.hasOwnProperty.call(categoryBudgetAllocations, key));
     if (allocationKey) {
       const allocation = Number(categoryBudgetAllocations[allocationKey]);
       if (Number.isFinite(allocation) && allocation >= 0) return budgetLimit * allocation / 100 * monthCount;
     }
-    const defaultAmount = defaultCategoryBudgetAmounts[category] ?? defaultBudgetLimit * 0.1;
-    return (budgetLimit * defaultAmount / defaultBudgetLimit) * monthCount;
+    return null;
   };
   const getBudgetCategories = () => [...new Set([
     'Housing', 'Food & dining', 'Transport', 'Shopping', 'Utilities', 'Entertainment', 'Health', 'Other',
@@ -956,13 +952,15 @@ document.addEventListener('DOMContentLoaded', () => {
       name.textContent = category;
       const amount = document.createElement('span');
       const limit = categoryLimitFor(category, getSelectedDateRange().monthCount);
-      const overage = total - limit;
-      if (overage > 0.005) {
+      const overage = limit === null ? 0 : total - limit;
+      if (limit !== null && overage > 0.005) {
         row.className = 'over-budget-category';
         amount.className = 'category-budget-overrun';
         amount.textContent = `${money(total)} / ${money(limit)} · Over by ${money(overage)}`;
       } else {
-        amount.textContent = `${money(total)} / ${money(limit)}`;
+        amount.textContent = limit === null
+          ? `${money(total)} · No limit set`
+          : `${money(total)} / ${money(limit)}`;
       }
       row.append(name, amount);
       return row;
@@ -999,21 +997,27 @@ document.addEventListener('DOMContentLoaded', () => {
     const spending = periodTransactions.filter((item) => item.type === 'expense').reduce((sum, item) => sum + item.amount, 0);
     const balance = transactions.filter((item) => item.date <= today && item.date < range.end).reduce((total, item) => total + (item.type === 'income' ? Number(item.amount) : -Number(item.amount)), 0);
     const savingsRate = income ? Math.max(0, ((income - spending) / income) * 100) : 0;
-    const activeBudgetLimit = budgetLimit * range.monthCount;
+    const activeBudgetLimit = Number.isFinite(budgetLimit) && budgetLimit > 0
+      ? budgetLimit * range.monthCount
+      : null;
     document.querySelector('#monthlyIncome').closest('.stat-card').querySelector('.stat-label').textContent = `Income · ${range.label}`;
     document.querySelector('#monthlySpending').closest('.stat-card').querySelector('.stat-label').textContent = `Spending · ${range.label}`;
     document.getElementById('budgetPeriodLabel').textContent = range.label;
     document.getElementById('timelinePeriodLabel').textContent = range.label;
-    document.getElementById('totalBalance').innerHTML = money(balance);
-    document.getElementById('monthlyIncome').innerHTML = money(income);
-    document.getElementById('monthlySpending').innerHTML = money(spending);
-    document.getElementById('savingsRate').innerHTML = `${savingsRate.toFixed(1)}<span class="decimal">%</span>`;
-    const percent = activeBudgetLimit > 0 ? (spending / activeBudgetLimit) * 100 : 0;
-    const overBudget = spending > activeBudgetLimit;
-    const overage = Math.max(0, spending - activeBudgetLimit);
-    document.getElementById('budgetUsed').innerHTML = `${money(spending)} <small>/ ${money(activeBudgetLimit)}</small>`;
+    document.getElementById('totalBalance').innerHTML = transactions.length ? money(balance) : '—';
+    document.getElementById('monthlyIncome').innerHTML = periodTransactions.length ? money(income) : '—';
+    document.getElementById('monthlySpending').innerHTML = periodTransactions.length ? money(spending) : '—';
+    document.getElementById('savingsRate').innerHTML = income > 0 ? `${savingsRate.toFixed(1)}<span class="decimal">%</span>` : '—';
+    const percent = activeBudgetLimit ? (spending / activeBudgetLimit) * 100 : 0;
+    const overBudget = activeBudgetLimit !== null && spending > activeBudgetLimit;
+    const overage = activeBudgetLimit === null ? 0 : Math.max(0, spending - activeBudgetLimit);
+    document.getElementById('budgetUsed').innerHTML = activeBudgetLimit
+      ? `${money(spending)} <small>/ ${money(activeBudgetLimit)}</small>`
+      : `${money(spending)} <small>spent</small>`;
     const roundedPercent = Math.round(percent);
-    document.getElementById('budgetPercent').innerHTML = roundedPercent > 999 ? '999%+' : `${roundedPercent}<small>%</small>`;
+    document.getElementById('budgetPercent').innerHTML = activeBudgetLimit
+      ? roundedPercent > 999 ? '999%+' : `${roundedPercent}<small>%</small>`
+      : '—';
     const budgetProgress = document.getElementById('budgetProgress');
     budgetProgress.style.width = `${Math.min(100, percent)}%`;
     budgetProgress.classList.toggle('over-budget', overBudget);
@@ -1021,10 +1025,11 @@ document.addEventListener('DOMContentLoaded', () => {
     const budgetOverrun = document.getElementById('budgetOverrun');
     budgetOverrun.textContent = overBudget ? `Over budget by ${money(overage)}` : '';
     budgetOverrun.classList.toggle('d-none', !overBudget);
-    document.getElementById('budgetRemaining').innerHTML = overBudget
-      ? `Over by ${money(overage)}`
-      : `${money(activeBudgetLimit - spending)} remaining`;
-
+    document.getElementById('budgetRemaining').textContent = activeBudgetLimit
+      ? overBudget
+        ? `Over by ${money(overage)}`
+        : `${money(activeBudgetLimit - spending)} remaining`
+      : 'Set a monthly budget to track progress';
     const expenseTransactions = periodTransactions.filter((item) => item.type === 'expense');
     const predictionAmount = document.getElementById('predictionAmount');
     const predictionCopy = document.getElementById('predictionCopy');
@@ -1041,7 +1046,10 @@ document.addEventListener('DOMContentLoaded', () => {
       predictionAmount.textContent = `${money(monthEndForecast.low)} – ${money(monthEndForecast.high)}`;
       predictionCopy.textContent = `Current month-end range · ${monthEndForecast.days_elapsed} days · ${monthEndForecast.expense_transaction_count} expenses`;
       predictionConfidence.textContent = `${monthEndForecast.confidence} confidence`;
-      if (monthEndForecast.point > monthEndForecast.monthly_budget) {
+      if (!monthEndForecast.monthly_budget) {
+        budgetInsightTitle.textContent = 'Forecast available';
+        budgetInsightCopy.textContent = monthEndForecast.budget_comparison_text;
+      } else if (monthEndForecast.point > monthEndForecast.monthly_budget) {
         budgetInsightTitle.textContent = 'Projected over budget';
         budgetInsightCopy.textContent = monthEndForecast.budget_comparison_text;
       } else {
@@ -1063,12 +1071,24 @@ document.addEventListener('DOMContentLoaded', () => {
     const periodExpenseTotal = periodExpenses.reduce((sum, item) => sum + item.amount, 0);
     document.getElementById('todayTotal').textContent = money(periodExpenseTotal);
     document.getElementById('timelineList').innerHTML = periodExpenses.length ? periodExpenses.slice().sort((a, b) => b.date.localeCompare(a.date) || (a.time || '').localeCompare(b.time || '')).map((item) => `<div class="timeline-item"><span class="timeline-time">${dateLabel(item.date)}${item.time ? ` · ${escapeHtml(item.time)}` : ''}</span><span class="timeline-dot"></span><div><strong>${escapeHtml(item.merchant)}</strong><small>${escapeHtml(item.category)}</small></div><b>${money(item.amount)}</b></div>`).join('') : '<div class="timeline-empty"><i class="fa-solid fa-sun"></i><span>No transactions this period.</span></div>';
-    const score = Math.max(0, Math.min(100, Math.round(55 + Math.min(25, savingsRate / 3) + Math.max(0, 20 - (spending / activeBudgetLimit) * 20))));
-    const grade = score >= 85 ? 'Excellent' : score >= 70 ? 'Good' : score >= 50 ? 'Average' : 'Needs work';
-    document.getElementById('healthScore').textContent = score;
-    document.getElementById('healthGrade').textContent = grade;
-    document.getElementById('healthGauge').style.strokeDashoffset = `${302 - (302 * score / 100)}`;
-    document.getElementById('healthReasons').innerHTML = `<span><i class="fa-solid fa-${savingsRate >= 20 ? 'check' : 'triangle-exclamation'}"></i> ${savingsRate >= 20 ? 'Savings rate is healthy' : 'Increase your savings rate'}</span><span><i class="fa-solid fa-${spending <= budgetLimit ? 'check' : 'triangle-exclamation'}"></i> ${spending <= budgetLimit ? 'Spending is within budget' : 'Budget needs attention'}</span><span><i class="fa-solid fa-lightbulb"></i> ${income > 0 ? 'Keep building your emergency fund' : 'Add income to unlock more insights'}</span>`;
+    const hasHealthData = periodTransactions.length > 0 && income > 0 && activeBudgetLimit !== null;
+    const healthScore = document.getElementById('healthScore');
+    const healthGrade = document.getElementById('healthGrade');
+    const healthGauge = document.getElementById('healthGauge');
+    const healthReasons = document.getElementById('healthReasons');
+    if (!hasHealthData) {
+      healthScore.textContent = '—';
+      healthGrade.textContent = 'Not enough data';
+      healthGauge.style.strokeDashoffset = '302';
+      healthReasons.textContent = 'Add transactions, income, and a monthly budget to see your financial health.';
+    } else {
+      const score = Math.max(0, Math.min(100, Math.round(55 + Math.min(25, savingsRate / 3) + Math.max(0, 20 - (spending / activeBudgetLimit) * 20))));
+      const grade = score >= 85 ? 'Excellent' : score >= 70 ? 'Good' : score >= 50 ? 'Average' : 'Needs work';
+      healthScore.textContent = score;
+      healthGrade.textContent = grade;
+      healthGauge.style.strokeDashoffset = `${302 - (302 * score / 100)}`;
+      healthReasons.innerHTML = `<span><i class="fa-solid fa-${savingsRate >= 20 ? 'check' : 'triangle-exclamation'}"></i> ${savingsRate >= 20 ? 'Savings rate is healthy' : 'Increase your savings rate'}</span><span><i class="fa-solid fa-${spending <= activeBudgetLimit ? 'check' : 'triangle-exclamation'}"></i> ${spending <= activeBudgetLimit ? 'Spending is within budget' : 'Budget needs attention'}</span><span><i class="fa-solid fa-lightbulb"></i> Keep building your emergency fund</span>`;
+    }
   };
 
   let settingsLoadedUserId = null;
@@ -1149,7 +1169,8 @@ document.addEventListener('DOMContentLoaded', () => {
       input.step = '0.01';
       input.required = true;
       input.dataset.settingsCategory = category;
-      input.value = categoryLimitFor(category, 1).toFixed(2);
+      const limit = categoryLimitFor(category, 1);
+      input.value = limit === null ? '' : limit.toFixed(2);
       wrapper.append(label, input);
       container.append(wrapper);
     });
@@ -1182,7 +1203,8 @@ document.addEventListener('DOMContentLoaded', () => {
       input.step = '0.01';
       input.required = true;
       input.dataset.editBudgetCategory = category;
-      input.value = categoryLimitFor(category, 1).toFixed(2);
+      const limit = categoryLimitFor(category, 1);
+      input.value = limit === null ? '' : limit.toFixed(2);
       wrapper.append(heading, input);
       container.append(wrapper);
     });
@@ -1190,32 +1212,30 @@ document.addEventListener('DOMContentLoaded', () => {
   };
 
   const updateBudgetAllocationSummary = () => {
-    const monthlyBudget = Number(document.getElementById('editMonthlyBudget').value);
+    const monthlyBudget = readFiniteInput(document.getElementById('editMonthlyBudget'));
     const inputs = [...document.querySelectorAll('[data-edit-budget-category]')];
     const validValues = inputs.map((input) => Number(input.value)).filter((value) => Number.isFinite(value) && value >= 0);
     const total = validValues.reduce((sum, value) => sum + value, 0);
     const summary = document.getElementById('editBudgetAllocationSummary');
     const warning = document.getElementById('editBudgetAllocationWarning');
-    summary.textContent = `Category limits ka total ${money(total)} hai, monthly budget ${money(monthlyBudget)} hai`;
-    const exceeds = Number.isFinite(monthlyBudget) && monthlyBudget > 0 && total > monthlyBudget;
+    summary.textContent = monthlyBudget === null
+      ? 'Enter a monthly budget and category limits.'
+      : `Category limits ka total ${money(total)} hai, monthly budget ${money(monthlyBudget)} hai`;
+    const exceeds = monthlyBudget !== null && monthlyBudget > 0 && total > monthlyBudget;
     warning.textContent = exceeds ? 'Category limits ka total monthly budget se zyada hai.' : '';
     warning.classList.toggle('d-none', !exceeds);
   };
 
   const resetEditBudgetCategoryDefaults = () => {
     document.getElementById('editBudgetCategoryLimits').querySelectorAll('[data-edit-budget-category]').forEach((input) => {
-      const defaultAmount = defaultCategoryBudgetAmounts[input.dataset.editBudgetCategory] ?? defaultBudgetLimit * 0.1;
-      const monthlyBudget = Number(document.getElementById('editMonthlyBudget').value);
-      input.value = Number.isFinite(monthlyBudget) && monthlyBudget > 0
-        ? (monthlyBudget * defaultAmount / defaultBudgetLimit).toFixed(2)
-        : '';
+      input.value = '';
     });
     updateBudgetAllocationSummary();
   };
 
   const syncBudgetSettingsFields = () => {
     const monthlyInput = document.getElementById('settingsMonthlyBudget');
-    if (monthlyInput) monthlyInput.value = budgetLimit.toFixed(2);
+    if (monthlyInput) monthlyInput.value = Number.isFinite(budgetLimit) ? budgetLimit.toFixed(2) : '';
     const currencyInput = document.getElementById('settingsCurrency');
     if (currencyInput) currencyInput.value = currencyConfig.code;
     document.getElementById('settingsJarvisCurrency').textContent = currencyConfig.symbol;
@@ -1281,7 +1301,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
   const editBudgetModal = bootstrap.Modal.getOrCreateInstance(document.getElementById('editBudgetModal'));
   document.getElementById('editBudgetButton').addEventListener('click', () => {
-    document.getElementById('editMonthlyBudget').value = budgetLimit.toFixed(2);
+    document.getElementById('editMonthlyBudget').value = Number.isFinite(budgetLimit) ? budgetLimit.toFixed(2) : '';
     document.getElementById('editBudgetCurrencyPrefix').textContent = currencyConfig.symbol;
     document.getElementById('editBudgetMessage').textContent = '';
     document.getElementById('editBudgetMessage').classList.remove('error');
@@ -1327,13 +1347,13 @@ document.addEventListener('DOMContentLoaded', () => {
       const result = await supabaseRequest('settings');
       setProfile(result.user);
       applyCurrency(result.settings.currency || 'INR');
-      budgetLimit = Number(result.settings.monthly_budget) > 0 ? Number(result.settings.monthly_budget) : defaultBudgetLimit;
+      budgetLimit = Number(result.settings.monthly_budget) > 0 ? Number(result.settings.monthly_budget) : null;
       categoryBudgetAllocations = result.settings.budget_allocations && typeof result.settings.budget_allocations === 'object'
         ? result.settings.budget_allocations
         : {};
       document.getElementById('settingsName').value = result.user.name;
       document.getElementById('settingsEmail').value = result.user.email;
-      document.getElementById('settingsMonthlyBudget').value = budgetLimit.toFixed(2);
+      document.getElementById('settingsMonthlyBudget').value = Number.isFinite(budgetLimit) ? budgetLimit.toFixed(2) : '';
       populateSettingsFinancialProfile(result.settings);
       document.getElementById('settingsJarvisAutoAdd').checked = result.settings.jarvis_auto_add_enabled === true;
       document.getElementById('settingsJarvisAutoAddLimit').value = Number(result.settings.jarvis_auto_add_limit || 5000).toFixed(2);
@@ -2032,9 +2052,6 @@ document.addEventListener('DOMContentLoaded', () => {
 
   renderTransactions();
   updateSummary();
-  if (storedProfile) {
-    setProfile(storedProfile);
-  }
   if (location.protocol !== 'file:' && supabaseClient) supabaseRequest('session').then(async (result) => {
     updateProAvailability(result.pro_enabled);
     if (result.requires_verification) {
@@ -2044,6 +2061,7 @@ document.addEventListener('DOMContentLoaded', () => {
     if (!result.user) return;
     supabaseUserAuthenticated = true;
     setProfile(result.user);
+    restoreJarvisConversation(result.user.id);
     await syncLocalTransactions();
     await loadSupabaseTransactions();
     await showOnboardingIfNeeded();
@@ -2373,6 +2391,7 @@ document.addEventListener('DOMContentLoaded', () => {
       if (!result.user || !data.user) throw new Error('Email confirmation succeeded, but your Finora profile could not be loaded.');
       supabaseUserAuthenticated = true;
       setProfile(result.user);
+      restoreJarvisConversation(result.user.id);
       localStorage.setItem('finora-profile', JSON.stringify(result.user));
       verificationModal.hide();
       sessionStorage.removeItem(finishSetupDismissedKey(result.user.id));
@@ -2495,22 +2514,6 @@ document.addEventListener('DOMContentLoaded', () => {
     const name = document.getElementById('accountName').value.trim();
     const email = document.getElementById('accountEmail').value.trim();
     const password = document.getElementById('accountPassword').value;
-    if (location.protocol === 'file:') {
-      const user = { id: 'demo-user', name, email };
-      localStorage.setItem('finora-profile', JSON.stringify(user));
-      setProfile(user);
-      await syncLocalTransactions();
-      bootstrap.Modal.getInstance(document.getElementById('accountModal')).hide();
-      document.getElementById('accountForm').reset();
-      const toast = document.getElementById('liveToast');
-      const toastBody = toast.querySelector('.toast-body');
-      const icon = document.createElement('i');
-      icon.className = 'fa-solid fa-circle-check me-2';
-      toastBody.replaceChildren(icon, document.createTextNode('Account created on this device.'));
-      bootstrap.Toast.getOrCreateInstance(toast).show();
-      showOnboardingIfNeeded();
-      return;
-    }
     try {
       if (!supabaseClient) throw new Error('Supabase is not configured. Please contact the site administrator.');
       const { data, error } = await supabaseClient.auth.signUp({
@@ -2645,16 +2648,6 @@ document.addEventListener('DOMContentLoaded', () => {
   document.getElementById('loginForm').addEventListener('submit', async (event) => {
     event.preventDefault();
     try {
-      if (location.protocol === 'file:') {
-        const name = document.getElementById('loginEmail').value.split('@')[0] || 'Demo user';
-        const user = { id: 'demo-user', name, email: document.getElementById('loginEmail').value };
-        setProfile(user);
-        localStorage.setItem('finora-profile', JSON.stringify(user));
-        bootstrap.Modal.getInstance(document.getElementById('loginModal')).hide();
-        await syncLocalTransactions();
-        showOnboardingIfNeeded();
-        return;
-      }
       if (!supabaseClient) throw new Error('Supabase is not configured. Please contact the site administrator.');
       const { data, error } = await supabaseClient.auth.signInWithPassword({
         email: document.getElementById('loginEmail').value.trim(),
@@ -2673,6 +2666,7 @@ document.addEventListener('DOMContentLoaded', () => {
       loginError.textContent = '';
       forgotPasswordLink.classList.add('d-none');
       setProfile(result.user);
+      restoreJarvisConversation(result.user.id);
       sessionStorage.removeItem(finishSetupDismissedKey(result.user.id));
       await syncLocalTransactions();
       await loadSupabaseTransactions();
@@ -2701,6 +2695,9 @@ document.addEventListener('DOMContentLoaded', () => {
   const jarvisToggle = document.getElementById('jarvisToggle');
   const jarvisWindow = document.getElementById('jarvisWindow');
   const jarvisClose = document.getElementById('jarvisClose');
+  let jarvisConversation = [];
+  let jarvisConversationUserId = null;
+  const jarvisConversationStorageKey = (userId) => `finora-jarvis-session-${userId}`;
 
   const addJarvisMessage = (text, sender = 'bot') => {
     const message = document.createElement('div');
@@ -2723,9 +2720,61 @@ document.addEventListener('DOMContentLoaded', () => {
     return message;
   };
 
+  const persistJarvisConversation = () => {
+    if (!jarvisConversationUserId) return;
+    try {
+      sessionStorage.setItem(
+        jarvisConversationStorageKey(jarvisConversationUserId),
+        JSON.stringify(jarvisConversation.slice(-12))
+      );
+    } catch (error) {
+      console.warn('Jarvis conversation history could not be saved for this tab.', error);
+    }
+  };
+  const restoreJarvisConversation = (userId) => {
+    if (!userId) return;
+    jarvisConversationUserId = String(userId);
+    try {
+      const stored = JSON.parse(sessionStorage.getItem(jarvisConversationStorageKey(jarvisConversationUserId)) || '[]');
+      jarvisConversation = Array.isArray(stored)
+        ? stored.filter((turn) =>
+          turn && (turn.role === 'user' || turn.role === 'model')
+          && typeof turn.text === 'string'
+          && turn.text.trim() !== ''
+        ).slice(-12).map((turn) => ({ role: turn.role, text: turn.text.slice(0, 1200) }))
+        : [];
+    } catch (error) {
+      console.warn('Saved Jarvis conversation history could not be loaded.', error);
+      jarvisConversation = [];
+    }
+    jarvisMessages.querySelectorAll('.jarvis-message:not(:first-child), .jarvis-action-card').forEach((message) => message.remove());
+    jarvisConversation.forEach((turn) => addJarvisMessage(turn.text, turn.role === 'user' ? 'user' : 'bot'));
+  };
+  const rememberJarvisTurn = (question, reply) => {
+    jarvisConversation.push({ role: 'user', text: question }, { role: 'model', text: reply });
+    jarvisConversation = jarvisConversation.slice(-12);
+    persistJarvisConversation();
+  };
+  const updateLastJarvisReply = (reply) => {
+    const lastReply = [...jarvisConversation].reverse().find((turn) => turn.role === 'model');
+    if (!lastReply) return;
+    lastReply.text = reply;
+    persistJarvisConversation();
+  };
+  const describeJarvisProposal = (proposal) => {
+    if (proposal.type === 'add_expense' || proposal.type === 'add_income') {
+      return `Action preview: ${proposal.type === 'add_income' ? 'add income' : 'add expense'} ${currencyConfig.symbol} ${Number(proposal.amount).toFixed(2)} for ${proposal.merchant} in ${proposal.category} on ${proposal.date}. Waiting for your confirmation.`;
+    }
+    if (proposal.type === 'add_goal_contribution') {
+      return `Action preview: contribute ${currencyConfig.symbol} ${Number(proposal.amount).toFixed(2)} to ${proposal.goal_name} on ${proposal.date}. Waiting for your confirmation.`;
+    }
+    return `Action preview: set monthly budget to ${currencyConfig.symbol} ${Number(proposal.amount).toFixed(2)}. Waiting for your confirmation.`;
+  };
+
   const jarvisLooksLikeAction = (text) => /\b(add|record|log|spent|spend|paid|expense|expence|expens|income|salary|received|earned|credited|credit|freelance|aayi|aaya|mila|grocery|groceries|kharch|kharcha|contribut|delete|remove)\b/i.test(text)
     || /\b(set|change)\b.*\b(budget|limit)\b|\b(edit|update)\b.*\btransaction\b/i.test(text)
-    || /\b\d[\d,]*(?:\.\d{1,2})?\s+ka\b/i.test(text);
+    || /\b\d[\d,]*(?:\.\d{1,2})?\s+ka\b/i.test(text)
+    || (jarvisConversation.length > 0 && /\b(same|again|that|it|another|do that|do it)\b/i.test(text));
 
   const jarvisActionLabel = (action) => ({
     add_expense: 'Add expense',
@@ -2836,6 +2885,7 @@ document.addEventListener('DOMContentLoaded', () => {
           body: JSON.stringify({ mode: 'confirm', proposal_token: proposalToken })
         });
         status.textContent = result.message;
+        updateLastJarvisReply(result.message);
         if (result.category_learning?.reason === 'limit_reached') {
           status.textContent += ' The 500 saved-category rule limit was reached.';
         } else if (result.category_learning?.reason === 'save_failed') {
@@ -2870,8 +2920,9 @@ document.addEventListener('DOMContentLoaded', () => {
         const values = Object.fromEntries(Object.entries(fields).map(([key, input]) => [key, key === 'amount' ? Number(input.value) : input.value]));
         const result = await supabaseRequest('jarvis-action', {
           method: 'POST',
-          body: JSON.stringify({ mode: 'revise', proposal_token: proposalToken, fields: values })
+          body: JSON.stringify({ mode: 'revise', proposal_token: proposalToken, fields: values, history: jarvisConversation })
         });
+        updateLastJarvisReply(describeJarvisProposal(result.proposal));
         card.replaceWith(renderJarvisActionCard(result.proposal, result.proposal_token));
       } catch (error) {
         status.textContent = error.message || 'Could not update the action preview.';
@@ -2884,9 +2935,10 @@ document.addEventListener('DOMContentLoaded', () => {
       try {
         await supabaseRequest('jarvis-action', {
           method: 'POST',
-          body: JSON.stringify({ mode: 'cancel', proposal_token: proposalToken })
+          body: JSON.stringify({ mode: 'cancel', proposal_token: proposalToken, history: jarvisConversation })
         });
         status.textContent = 'Action cancelled. Nothing was changed.';
+        updateLastJarvisReply('Action cancelled. Nothing was changed.');
         controls.remove();
         editForm.remove();
       } catch (error) {
@@ -2920,6 +2972,7 @@ document.addEventListener('DOMContentLoaded', () => {
         });
         window.clearTimeout(expiryTimer);
         messageStatus.textContent = result.message;
+        updateLastJarvisReply(result.message);
         undoButton.remove();
         try {
           await loadSupabaseTransactions();
@@ -2964,20 +3017,23 @@ document.addEventListener('DOMContentLoaded', () => {
       if (jarvisLooksLikeAction(question)) {
         const result = await supabaseRequest('jarvis-action', {
           method: 'POST',
-          body: JSON.stringify({ mode: 'preview', command: question })
+          body: JSON.stringify({ mode: 'preview', command: question, history: jarvisConversation })
         });
         if (result.auto_added) {
+          rememberJarvisTurn(question, result.message);
           renderJarvisUndo(result.undo_token, result.message);
           await loadSupabaseTransactions();
         } else {
+          rememberJarvisTurn(question, describeJarvisProposal(result.proposal));
           renderJarvisActionCard(result.proposal, result.proposal_token);
         }
         return;
       }
       const result = await supabaseRequest('jarvis', {
         method: 'POST',
-        body: JSON.stringify({ question, period: selectedDateRange })
+        body: JSON.stringify({ question, period: selectedDateRange, history: jarvisConversation })
       });
+      rememberJarvisTurn(question, result.reply);
       addJarvisMessage(result.reply, 'bot');
     } catch (error) {
       addJarvisMessage(error.message || 'Jarvis could not answer right now. Please try again.');
@@ -3001,6 +3057,8 @@ document.addEventListener('DOMContentLoaded', () => {
     }
     if (activeUser?.id) {
       sessionStorage.removeItem(finishSetupDismissedKey(activeUser.id));
+      sessionStorage.removeItem(jarvisConversationStorageKey(activeUser.id));
+      jarvisConversation = [];
     }
     localStorage.removeItem('finora-profile');
     location.reload();

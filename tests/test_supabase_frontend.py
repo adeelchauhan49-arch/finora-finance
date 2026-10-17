@@ -71,13 +71,35 @@ class SupabaseFrontendTests(unittest.TestCase):
         for secret_name in ('RAZORPAY_KEY_SECRET', 'SUPABASE_SERVICE_ROLE_KEY'):
             self.assertNotIn(secret_name, self.app)
 
+    def test_jarvis_uses_gemini_with_bounded_current_tab_history(self):
+        jarvis = self.root.joinpath('supabase', 'functions', 'jarvis', 'index.ts').read_text(encoding='utf-8')
+        action = self.root.joinpath('supabase', 'functions', 'jarvis-action', 'index.ts').read_text(encoding='utf-8')
+        self.assertIn('gemini-2.5-flash', jarvis)
+        self.assertIn('generativelanguage.googleapis.com/v1beta/models/', jarvis)
+        self.assertIn('contents: [', jarvis)
+        self.assertIn('...history,', jarvis)
+        self.assertIn('slice(-12)', jarvis)
+        self.assertIn('current financial snapshot is the source of truth', jarvis)
+        self.assertNotIn('if (snapshot.data_is_limited) {', jarvis)
+        self.assertIn('finora-jarvis-session-${userId}', self.app)
+        self.assertIn('sessionStorage.setItem(', self.app)
+        self.assertIn('sessionStorage.getItem(jarvisConversationStorageKey', self.app)
+        self.assertIn('restoreJarvisConversation(result.user.id)', self.app)
+        self.assertIn('history: jarvisConversation', self.app)
+        self.assertIn('parseContextualAction(admin, userId, command, history)', action)
+        self.assertIn("JSON.stringify({ mode: 'confirm'", self.app)
+        self.assertIn('rpc("finora_confirm_jarvis_action"', action)
+
     def test_setup_explains_migrations_static_host_and_server_secret_handling(self):
         setup = self.root.joinpath('SETUP.md').read_text(encoding='utf-8')
         self.assertIn('static HTML/CSS/JavaScript frontend', setup)
         self.assertIn('supabase/migrations', setup)
         self.assertIn('supabase functions deploy jarvis', setup)
         self.assertIn('service-role key', setup)
-        self.assertIn('rotating any credentials that were previously stored in `.env`', setup)
+        self.assertIn('Rotate any credentials that were previously stored in `.env`', setup)
+        self.assertIn("Google's Gemini", setup)
+        self.assertIn('per-tab `sessionStorage`', setup)
+        self.assertIn('Do not upload a complete `.env` file', setup)
         self.assertNotIn('composer install', setup)
 
 
