@@ -71,8 +71,6 @@ h2{font-size:clamp(1.8rem,3.6vw,2.6rem);font-weight:700;max-width:20ch}
 .b1 p{color:rgba(255,255,255,.92)}.b1 .ic{background:rgba(255,255,255,.2)}
 .b2{grid-column:span 3}.b3,.b4,.b5{grid-column:span 2}
 .b6{grid-column:span 4;display:flex;gap:1.2rem;align-items:center;justify-content:space-between;flex-wrap:wrap}
-.meter{height:12px;border-radius:99px;background:var(--line);overflow:hidden;margin-top:1rem}
-.meter span{display:block;height:100%;width:100%;background:linear-gradient(90deg,var(--g1),var(--bad))}
 .steps{display:grid;grid-template-columns:repeat(3,1fr);gap:2rem;margin-top:2.4rem;counter-reset:s}
 .steps li{list-style:none;border-top:3px solid var(--g2);padding-top:1rem;counter-increment:s}
 .steps li::before{content:counter(s);font:800 2.2rem Poppins,sans-serif;color:var(--g2)}
@@ -113,25 +111,23 @@ footer{padding:2.5rem 0;color:var(--muted);font-size:.92rem;display:flex;justify
         <p class="sub">Track spending, stay inside your budget and reach your savings goals. Jarvis answers from your real numbers and asks before it saves anything.</p>
         <div class="cta">
           <a class="btn btn-pink" href="index.html#signup" data-auth="signup">Start free</a>
-          <a class="btn btn-ghost" href="index.html#demo" data-auth="demo">Try the demo</a>
         </div>
         <div class="facts"><span>Free to use</span><span>Email-verified accounts</span><span>You confirm every Jarvis action</span></div>
       </div>
       <div class="stage" aria-hidden="true">
         <div class="phone"><div class="screen">
-          <small>This month</small>
-          <div class="bal"><small style="color:#CFC9FF">Total balance</small><b>Rs 37,677.82</b></div>
+          <small>Your dashboard</small>
+          <div class="bal"><small style="color:#CFC9FF">Total balance</small><b>Shown from your transactions</b></div>
           <div class="ring-row">
-            <svg width="52" height="52" viewBox="0 0 36 36"><circle cx="18" cy="18" r="15" fill="none" stroke="#E6E3F5" stroke-width="5"/><circle cx="18" cy="18" r="15" fill="none" stroke="#D81B7A" stroke-width="5" stroke-linecap="round" stroke-dasharray="68 94" transform="rotate(-90 18 18)"/></svg>
-            <div><b>72% of budget used</b><br><small>Rs 21,600 of Rs 30,000</small></div>
+            <svg width="52" height="52" viewBox="0 0 36 36"><circle cx="18" cy="18" r="15" fill="none" stroke="#E6E3F5" stroke-width="5"/></svg>
+            <div><b>Budget progress</b><br><small>Set your budget to track progress</small></div>
           </div>
-          <div class="tx"><span>Swiggy<br><small>Food &amp; dining</small></span><em class="neg">-Rs 250</em></div>
-          <div class="tx"><span>Salary<br><small>Income</small></span><em class="pos">+Rs 30,000</em></div>
-          <div class="tx"><span>Uber<br><small>Transport</small></span><em class="neg">-Rs 200</em></div>
-          <div class="samp">Sample data</div>
+          <div class="tx"><span>Transactions</span><em class="pos">Added by you</em></div>
+          <div class="tx"><span>Reports</span><em>Based on your data</em></div>
+          <div class="tx"><span>Forecasts</span><em>When enough data is available</em></div>
         </div></div>
-        <div class="chip j"><b>Jarvis</b><br>Add Rs 500 for groceries today?<br><span class="ok">Confirm</span></div>
-        <div class="chip f"><b>Month-end forecast</b><br>About Rs 36,000. Rs 6,000 over budget.</div>
+        <div class="chip j"><b>Jarvis</b><br>Ask about your recorded finances.</div>
+        <div class="chip f"><b>Month-end forecast</b><br>Available when enough transaction history exists.</div>
       </div>
     </div>
   </div>
@@ -143,8 +139,8 @@ footer{padding:2.5rem 0;color:var(--muted);font-size:.92rem;display:flex;justify
   <h2>Everything you need to stay in control</h2>
   <p class="lead">Built for everyday money: salary in, bills out, and what is left to save.</p>
   <div class="bento">
-    <article class="b b1"><div class="ic" aria-hidden="true">💬</div><h3>Jarvis, your assistant</h3><p>Type "500 ka grocery" or "salary 30000 aayi". Jarvis shows a preview card and saves only after you confirm. You can undo what it just added.</p></article>
-    <article class="b b2"><div class="ic" aria-hidden="true">🎯</div><h3>Budgets that warn you</h3><p>Set a monthly budget and a limit for each category. Anything over its limit turns red, with the exact amount.</p><div class="meter" aria-hidden="true"><span></span></div></article>
+    <article class="b b1"><div class="ic" aria-hidden="true">💬</div><h3>Jarvis, your assistant</h3><p>Describe a transaction in everyday language. Jarvis shows a preview card and saves only after you confirm. You can undo what it just added.</p></article>
+    <article class="b b2"><div class="ic" aria-hidden="true">🎯</div><h3>Budgets that warn you</h3><p>Set a monthly budget and a limit for each category. Anything over its limit turns red, with the exact amount.</p></article>
     <article class="b b3"><div class="ic" aria-hidden="true">📈</div><h3>Month-end forecast</h3><p>Recurring bills like EMIs are counted once, so one big payment never inflates the estimate.</p></article>
     <article class="b b4"><div class="ic" aria-hidden="true">🏁</div><h3>Savings goals</h3><p>Name a goal, add contributions and see how much to save each month to hit your date.</p></article>
     <article class="b b5"><div class="ic" aria-hidden="true">📊</div><h3>Reports and export</h3><p>See spending by category, pick any date range and download your transactions as CSV.</p></article>
@@ -164,14 +160,13 @@ footer{padding:2.5rem 0;color:var(--muted);font-size:.92rem;display:flex;justify
 <section class="jarvis" id="jarvis"><div class="wrap jgrid">
   <div>
     <h2>Ask Jarvis instead of digging through screens</h2>
-    <p class="lead">"Where am I overspending?" "Can I afford Rs 5,000?" Jarvis answers from your own transactions. If your data is too thin to say something useful, it tells you so.</p>
+    <p class="lead">Ask where you are overspending or whether a purchase fits your budget. Jarvis answers from your own transactions. If your data is too thin to say something useful, it tells you so.</p>
   </div>
-  <div class="chat" role="img" aria-label="Sample chat with Jarvis">
-    <div class="m me">where am I overspending</div>
-    <div class="m bot">Transport is Rs 30,500 of your Rs 34,271 spending this month, about 89%. Most of it is one EMI payment.</div>
-    <div class="m me">add 150 for coffee</div>
-    <div class="m bot">Add expense: coffee, Rs 150, Food &amp; dining, today. Confirm or cancel?</div>
-    <small>Sample conversation</small>
+  <div class="chat" role="img" aria-label="Jarvis answers using your account data">
+    <div class="m me">Ask about your finances</div>
+    <div class="m bot">Jarvis uses your account's transaction history to answer. Answers depend on the data available.</div>
+    <div class="m me">Describe a transaction</div>
+    <div class="m bot">Review the proposed details and confirm before anything is saved.</div>
   </div>
 </div></section>
 
